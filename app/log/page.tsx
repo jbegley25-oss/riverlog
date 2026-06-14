@@ -6,11 +6,13 @@ import { ArrowLeft, ArrowRight, Check, Camera, ImageIcon, X } from 'lucide-react
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
 
-type Step = 'date' | 'river' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
-const STEPS: Step[] = ['date', 'river', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
+type Step = 'date' | 'type' | 'river' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
+const ALL_STEPS: Step[] = ['date', 'type', 'river', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
+const PRIVATE_STEPS: Step[] = ['date', 'type', 'river', 'location', 'boat', 'hours', 'miles', 'notes', 'review']
 
 const STEP_LABELS: Record<Step, string> = {
   date: 'Date',
+  type: 'Trip Type',
   river: 'River',
   location: 'Put-in & Take-out',
   boat: 'Boat Type',
@@ -21,6 +23,9 @@ const STEP_LABELS: Record<Step, string> = {
   company: 'Company & License',
   review: 'Review & Save',
 }
+
+const COMPANY_NAME = 'Sage Outdoor Adventures'
+const ROL_LICENSE = '653'
 
 const COLORADO_RIVERS = [
   'Arkansas River', 'Colorado River', 'Clear Creek', 'Cache la Poudre',
@@ -44,6 +49,8 @@ const BOAT_LABELS: Record<BoatType, string> = {
 export default function LogPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [tripType, setTripType] = useState<'commercial' | 'private' | ''>('')
+  const STEPS = tripType === 'private' ? PRIVATE_STEPS : ALL_STEPS
   const [stepIndex, setStepIndex] = useState(0)
   const step = STEPS[stepIndex]
   const [saving, setSaving] = useState(false)
@@ -67,20 +74,16 @@ export default function LogPage() {
   const [hours, setHours] = useState('')
   const [miles, setMiles] = useState('')
   const [notes, setNotes] = useState('')
-  const [companyName, setCompanyName] = useState('')
-  const [rolLicense, setRolLicense] = useState('')
 
-  // Prefill company/license from profile + grab userId
+  // Company/ROL hardcoded for all users; editable on the company step if needed
+  const [companyName, setCompanyName] = useState(COMPANY_NAME)
+  const [rolLicense, setRolLicense] = useState(ROL_LICENSE)
+
+  // Grab userId for photo uploads
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      setUserId(user.id)
-      const { data } = await supabase.from('profiles').select('company_name, rol_license').eq('id', user.id).single()
-      if (data) {
-        setCompanyName(data.company_name ?? '')
-        setRolLicense(data.rol_license ?? '')
-      }
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id)
     })
   }, [])
 
@@ -113,13 +116,14 @@ export default function LogPage() {
   function canAdvance() {
     switch (step) {
       case 'date': return !!date
+      case 'type': return !!tripType
       case 'river': return !!river
       case 'location': return !!putIn && !!takeOut
       case 'boat': return !!boatType
       case 'role': return !!role
       case 'hours': return !!hours && parseFloat(hours) > 0
       case 'miles': return !!miles && parseFloat(miles) >= 0
-      case 'notes': return true  // optional
+      case 'notes': return true
       case 'company': return !!companyName && !!rolLicense
       default: return true
     }
@@ -127,6 +131,20 @@ export default function LogPage() {
 
   function next() { if (stepIndex < STEPS.length - 1) setStepIndex(i => i + 1) }
   function back() { if (stepIndex > 0) setStepIndex(i => i - 1) }
+
+  function selectTripType(t: 'commercial' | 'private') {
+    setTripType(t)
+    // Auto-set role and company for private trips
+    if (t === 'private') {
+      setRole('private')
+      setCompanyName('PRIVATE')
+      setRolLicense('')
+    } else {
+      if (role === 'private') setRole('')
+      setCompanyName(COMPANY_NAME)
+      setRolLicense(ROL_LICENSE)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -146,8 +164,8 @@ export default function LogPage() {
       role,
       hours: parseFloat(hours),
       miles: parseFloat(miles),
-      company_name: companyName,
-      rol_license: rolLicense,
+      company_name: tripType === 'private' ? 'PRIVATE' : companyName,
+      rol_license: tripType === 'private' ? '' : rolLicense,
       notes: notes.trim() || null,
     })
 
@@ -196,6 +214,23 @@ export default function LogPage() {
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Trip Date</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-river"
               style={{ fontSize: 18, padding: '16px' }} max={today} />
+          </div>
+        )}
+
+        {step === 'type' && (
+          <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 8 }}>Was this a commercial or private trip?</p>
+            {([
+              { value: 'commercial', label: 'Commercial', desc: 'Guided trip with paying clients under Sage Outdoor Adventures' },
+              { value: 'private', label: 'Private', desc: 'Personal, non-commercial run — logged as "PRIVATE"' },
+            ] as const).map(opt => (
+              <button key={opt.value} onClick={() => selectTripType(opt.value)}
+                className={`pill-option ${tripType === opt.value ? 'selected' : ''}`}
+                style={{ borderRadius: 12, padding: '18px 20px', textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{opt.label}</div>
+                <div style={{ fontSize: 12, color: tripType === opt.value ? '#0891b2' : '#334155', marginTop: 3 }}>{opt.desc}</div>
+              </button>
+            ))}
           </div>
         )}
 
@@ -381,7 +416,7 @@ export default function LogPage() {
               <input value={rolLicense} onChange={e => setRolLicense(e.target.value)}
                 placeholder="e.g. ROL-12345" className="input-river" />
             </div>
-            <p style={{ fontSize: 12, color: '#334155' }}>These are pre-filled from your profile. Edit if needed for this trip.</p>
+            <p style={{ fontSize: 12, color: '#334155' }}>Pre-filled for Sage Outdoor Adventures. Edit if needed for this trip.</p>
           </div>
         )}
 
@@ -389,16 +424,17 @@ export default function LogPage() {
           <div style={{ marginTop: 20 }}>
             <div className="glass" style={{ borderRadius: 14, overflow: 'hidden' }}>
               {[
+                ['Trip Type', tripType === 'private' ? 'Private' : 'Commercial'],
                 ['Date', date],
                 ['River', river],
                 ['Put-in', putIn],
                 ['Take-out', takeOut],
                 ['Boat Type', BOAT_LABELS[boatType as BoatType]],
-                ['Role', ROLE_LABELS[role as GuideRole]],
+                ...(tripType !== 'private' ? [['Role', ROLE_LABELS[role as GuideRole]]] : []),
                 ['Hours', `${hours} hours`],
                 ['Miles', `${miles} miles`],
-                ['Company', companyName],
-                ['ROL License', rolLicense],
+                ['Company', tripType === 'private' ? 'PRIVATE' : companyName],
+                ...(tripType !== 'private' ? [['ROL License', rolLicense]] : []),
                 ...(notes.trim() ? [['Notes', notes.trim()]] : []),
                 ...(photos.length ? [['Photos', `${photos.length} photo${photos.length > 1 ? 's' : ''}`]] : []),
               ].map(([label, value], i, arr) => (
