@@ -150,9 +150,14 @@ export default function DashboardClient({ profile, entries, totals }: {
                         <span style={{ fontSize: 15, fontWeight: 600, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {entry.river}
                         </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#0891b2', background: 'rgba(8,145,178,0.15)', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {ROLE_LABELS[entry.role]}
+                        <span style={{ fontSize: 11, fontWeight: 600, color: entry.role === 'private' ? '#94a3b8' : '#22d3ee', background: entry.role === 'private' ? 'rgba(148,163,184,0.12)' : 'rgba(34,211,238,0.12)', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {entry.role === 'private' ? 'Private' : 'Commercial'}
                         </span>
+                        {entry.role !== 'private' && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#0891b2', background: 'rgba(8,145,178,0.15)', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {ROLE_LABELS[entry.role]}
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 12, fontSize: 12, color: '#475569' }}>
                         <span>{format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}</span>

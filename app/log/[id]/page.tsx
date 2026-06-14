@@ -104,17 +104,18 @@ export default function EntryPage() {
   )
   if (!entry) return null
 
+  const isPrivate = entry.role === 'private'
   const fields = [
     ['Date', format(new Date(entry.date + 'T00:00:00'), 'MMMM d, yyyy')],
+    ['Trip Type', isPrivate ? 'Private' : 'Commercial'],
     ['River', entry.river],
     ['Put-in', entry.put_in],
     ['Take-out', entry.take_out],
     ['Boat Type', BOAT_LABELS[entry.boat_type]],
-    ['Role', ROLE_LABELS[entry.role]],
+    ...(!isPrivate ? [['Role', ROLE_LABELS[entry.role]]] : []),
     ['Hours on River', `${entry.hours} hours`],
     ['River Miles', `${entry.miles} miles`],
-    ['Company', entry.company_name],
-    ['ROL License', entry.rol_license],
+    ...(!isPrivate ? [['Company', entry.company_name], ['ROL License', entry.rol_license]] : []),
   ]
 
   return (
@@ -134,9 +135,14 @@ export default function EntryPage() {
         <div style={{ marginBottom: 20 }}>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff', marginBottom: 6 }}>{entry.river}</h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#0891b2', background: 'rgba(8,145,178,0.15)', borderRadius: 4, padding: '3px 8px' }}>
-              {ROLE_LABELS[entry.role]}
+            <span style={{ fontSize: 12, fontWeight: 600, color: isPrivate ? '#94a3b8' : '#22d3ee', background: isPrivate ? 'rgba(148,163,184,0.12)' : 'rgba(34,211,238,0.12)', borderRadius: 4, padding: '3px 8px' }}>
+              {isPrivate ? 'Private' : 'Commercial'}
             </span>
+            {!isPrivate && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#0891b2', background: 'rgba(8,145,178,0.15)', borderRadius: 4, padding: '3px 8px' }}>
+                {ROLE_LABELS[entry.role]}
+              </span>
+            )}
             <span style={{ fontSize: 12, color: '#475569', background: 'rgba(71,85,105,0.2)', borderRadius: 4, padding: '3px 8px' }}>
               {BOAT_LABELS[entry.boat_type]}
             </span>

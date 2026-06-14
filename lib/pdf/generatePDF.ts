@@ -102,13 +102,16 @@ function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum
     doc.circle(boatX - 2, checkY + 0.5, 1, 'F')
     line(doc, M + 53, y, M + 53, y + ENTRY_H)
 
-    // Role (Guide / Trip Leader / Guide Instructor)
+    // Role (Guide / Trip Leader / Guide Instructor) + Trip Type
     const roleX = M + 73
     text(doc, 'Guide', roleX, y + 3, { size: 5 })
     text(doc, 'Trip Leader', roleX, y + 6.5, { size: 5 })
     text(doc, 'Guide Instructor', roleX, y + 10, { size: 5 })
-    const roleCheckY = entry.role === 'guide' ? y + 2 : entry.role === 'trip_leader' ? y + 5.5 : y + 9
-    doc.circle(roleX - 2, roleCheckY + 0.5, 1, 'F')
+    if (entry.role !== 'private') {
+      const roleCheckY = entry.role === 'guide' ? y + 2 : entry.role === 'trip_leader' ? y + 5.5 : y + 9
+      doc.circle(roleX - 2, roleCheckY + 0.5, 1, 'F')
+    }
+    text(doc, entry.role === 'private' ? 'PRIVATE' : 'COMMERCIAL', roleX - 2, y + 14, { size: 4.5, bold: true })
     line(doc, M + 71, y, M + 71, y + ENTRY_H)
 
     // Hours
