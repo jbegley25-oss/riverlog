@@ -1,6 +1,11 @@
 -- Run this in your Supabase SQL Editor
 
--- Profiles table (extends auth.users)
+-- Drop existing tables if re-running
+drop table if exists public.log_entries cascade;
+drop table if exists public.profiles cascade;
+drop function if exists public.handle_new_user cascade;
+
+-- Profiles table
 create table public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   first_name text not null default '',
@@ -30,23 +35,21 @@ create table public.log_entries (
   created_at timestamptz not null default now()
 );
 
--- RLS policies
+-- Enable RLS
 alter table public.profiles enable row level security;
 alter table public.log_entries enable row level security;
 
--- Profiles: users can read/update their own; admins can read all
+-- Profiles policies
 create policy "Users can view own profile" on public.profiles
   for select using (auth.uid() = id);
 
 create policy "Users can update own profile" on public.profiles
   for update using (auth.uid() = id);
 
-create policy "Admins can view all profiles" on public.profiles
-  for select using (
-    exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
-  );
+create policy "Users can insert own profile" on public.profiles
+  for insert with check (auth.uid() = id);
 
--- Log entries: users manage their own; admins can read all
+-- Log entries policies
 create policy "Users can view own entries" on public.log_entries
   for select using (auth.uid() = user_id);
 
@@ -59,12 +62,18 @@ create policy "Users can update own entries" on public.log_entries
 create policy "Users can delete own entries" on public.log_entries
   for delete using (auth.uid() = user_id);
 
-create policy "Admins can view all entries" on public.log_entries
+-- Admin policies (non-recursive)
+create policy "Admins can view all profiles" on public.profiles
   for select using (
-    exists (select 1 from public.profiles where id = auth.uid() and is_admin = true)
+    (select is_admin from public.profiles where id = auth.uid()) = true
   );
 
--- Auto-create profile on signup
+create policy "Admins can view all entries" on public.log_entries
+  for select using (
+    (select is_admin from public.profiles where id = auth.uid()) = true
+  );
+
+-- Auto-create profile row on signup
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = ''
 as $$

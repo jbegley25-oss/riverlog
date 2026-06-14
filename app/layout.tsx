@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 
 export const metadata: Metadata = {
   title: 'RiverLog — On-River Hour Tracker',
   description: 'Colorado Division of Parks & Wildlife on-river hour logging for guides and outfitters',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'RiverLog' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'RiverLog', startupImage: '/icons/apple-touch-icon.png' },
+  icons: { apple: '/icons/apple-touch-icon.png' },
 }
 
 export const viewport: Viewport = {
@@ -19,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full flex flex-col" style={{ background: '#0a1628' }}>
+        <ServiceWorkerRegistrar />
         {children}
       </body>
     </html>
