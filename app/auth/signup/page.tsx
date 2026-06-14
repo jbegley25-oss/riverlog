@@ -37,15 +37,15 @@ export default function SignupPage() {
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({
+      .upsert({
+        id: data.user.id,
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || null,
         date_of_birth: dob || null,
         company_name: companyName,
         rol_license: rolLicense,
-      })
-      .eq('id', data.user.id)
+      }, { onConflict: 'id' })
 
     if (profileError) {
       setError(profileError.message)

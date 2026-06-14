@@ -18,7 +18,7 @@ export default function ProfilePage() {
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/auth/login'); return }
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
       if (data) setProfile(data)
       setLoading(false)
     })

@@ -10,9 +10,14 @@ export default async function DashboardPage() {
   if (!user) redirect('/auth/login')
 
   const [{ data: profile }, { data: entries }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
     supabase.from('log_entries').select('*').eq('user_id', user.id).order('date', { ascending: false }),
   ])
+
+  // Profile missing means the DB trigger didn't fire — create it now
+  if (!profile) {
+    await supabase.from('profiles').upsert({ id: user.id }, { onConflict: 'id' })
+  }
 
   const totals: Totals = (entries ?? []).reduce((acc: Totals, e: LogEntry) => {
     if (e.role === 'guide') {
