@@ -6,8 +6,8 @@ import { ArrowLeft, ArrowRight, Check, Waves } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
 
-type Step = 'date' | 'river' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'company' | 'review'
-const STEPS: Step[] = ['date', 'river', 'location', 'boat', 'role', 'hours', 'miles', 'company', 'review']
+type Step = 'date' | 'river' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
+const STEPS: Step[] = ['date', 'river', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
 
 const STEP_LABELS: Record<Step, string> = {
   date: 'Date',
@@ -17,6 +17,7 @@ const STEP_LABELS: Record<Step, string> = {
   role: 'Your Role',
   hours: 'Hours on River',
   miles: 'Miles on River',
+  notes: 'Trip Notes',
   company: 'Company & License',
   review: 'Review & Save',
 }
@@ -58,6 +59,7 @@ export default function LogPage() {
   const [role, setRole] = useState<GuideRole | ''>('')
   const [hours, setHours] = useState('')
   const [miles, setMiles] = useState('')
+  const [notes, setNotes] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [rolLicense, setRolLicense] = useState('')
 
@@ -85,6 +87,7 @@ export default function LogPage() {
       case 'role': return !!role
       case 'hours': return !!hours && parseFloat(hours) > 0
       case 'miles': return !!miles && parseFloat(miles) >= 0
+      case 'notes': return true  // optional
       case 'company': return !!companyName && !!rolLicense
       default: return true
     }
@@ -112,6 +115,7 @@ export default function LogPage() {
       miles: parseFloat(miles),
       company_name: companyName,
       rol_license: rolLicense,
+      notes: notes.trim() || null,
     })
 
     if (error) {
@@ -261,6 +265,25 @@ export default function LogPage() {
           </div>
         )}
 
+        {step === 'notes' && (
+          <div style={{ marginTop: 28 }}>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>
+              Add any notes about this trip — conditions, highlights, client details. Optional.
+            </p>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. High water, Class IV conditions. Group of 6. Excellent visibility…"
+              rows={7}
+              className="input-river"
+              style={{ resize: 'none', lineHeight: 1.6 }}
+            />
+            <div style={{ textAlign: 'right', fontSize: 12, color: '#334155', marginTop: 6 }}>
+              {notes.length} characters
+            </div>
+          </div>
+        )}
+
         {step === 'company' && (
           <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
@@ -291,8 +314,9 @@ export default function LogPage() {
                 ['Miles', `${miles} miles`],
                 ['Company', companyName],
                 ['ROL License', rolLicense],
-              ].map(([label, value], i) => (
-                <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 18px', borderBottom: i < 9 ? '1px solid rgba(34,211,238,0.08)' : 'none' }}>
+                ...(notes.trim() ? [['Notes', notes.trim()]] : []),
+              ].map(([label, value], i, arr) => (
+                <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 18px', borderBottom: i < arr.length - 1 ? '1px solid rgba(34,211,238,0.08)' : 'none' }}>
                   <span style={{ fontSize: 13, color: '#475569' }}>{String(label)}</span>
                   <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600, maxWidth: '60%', textAlign: 'right' }}>{String(value)}</span>
                 </div>
