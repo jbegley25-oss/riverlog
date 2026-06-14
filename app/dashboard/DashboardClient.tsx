@@ -48,8 +48,8 @@ export default function DashboardClient({ profile, entries, totals }: {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a1628' }}>
-      {/* Header */}
-      <div style={{ background: 'rgba(13,31,60,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(34,211,238,0.1)', position: 'sticky', top: 0, zIndex: 50 }}>
+      {/* Header — padded for PWA status bar */}
+      <div style={{ background: 'rgba(13,31,60,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(34,211,238,0.1)', position: 'sticky', top: 0, zIndex: 50, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ background: 'linear-gradient(135deg, #0891b2, #22d3ee)', borderRadius: 10, padding: 8 }}>
@@ -72,10 +72,10 @@ export default function DashboardClient({ profile, entries, totals }: {
         {/* Greeting */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
-            Hey, {profile?.first_name || 'Guide'} 👋
+            Hey, {[profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'there'} 👋
           </h1>
           <p style={{ color: '#475569', fontSize: 14 }}>
-            {profile?.company_name} · ROL {profile?.rol_license}
+            {profile?.company_name}
           </p>
         </div>
 
