@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Check, Waves } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Camera, ImageIcon, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
 
@@ -17,7 +17,7 @@ const STEP_LABELS: Record<Step, string> = {
   role: 'Your Role',
   hours: 'Hours on River',
   miles: 'Miles on River',
-  notes: 'Trip Notes',
+  notes: 'Notes & Photos',
   company: 'Company & License',
   review: 'Review & Save',
 }
@@ -43,10 +43,17 @@ const BOAT_LABELS: Record<BoatType, string> = {
 
 export default function LogPage() {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const step = STEPS[stepIndex]
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // Pre-generate entry ID so photos can upload before save
+  const [entryId] = useState(() => crypto.randomUUID())
+  const [userId, setUserId] = useState<string | null>(null)
+  const [photos, setPhotos] = useState<{ path: string; url: string }[]>([])
+  const [uploading, setUploading] = useState(false)
 
   // Form state
   const today = new Date().toISOString().split('T')[0]
@@ -63,11 +70,12 @@ export default function LogPage() {
   const [companyName, setCompanyName] = useState('')
   const [rolLicense, setRolLicense] = useState('')
 
-  // Prefill company/license from profile
+  // Prefill company/license from profile + grab userId
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
+      setUserId(user.id)
       const { data } = await supabase.from('profiles').select('company_name, rol_license').eq('id', user.id).single()
       if (data) {
         setCompanyName(data.company_name ?? '')
@@ -75,6 +83,30 @@ export default function LogPage() {
       }
     })
   }, [])
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length || !userId) return
+    setUploading(true)
+    const supabase = createClient()
+    for (const file of files) {
+      const ext = file.name.split('.').pop()
+      const path = `${userId}/${entryId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('trip-photos').upload(path, file, { contentType: file.type })
+      if (!error) {
+        const { data } = await supabase.storage.from('trip-photos').createSignedUrl(path, 3600)
+        if (data?.signedUrl) setPhotos(prev => [...prev, { path, url: data.signedUrl }])
+      }
+    }
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function removePhoto(path: string) {
+    const supabase = createClient()
+    await supabase.storage.from('trip-photos').remove([path])
+    setPhotos(prev => prev.filter(p => p.path !== path))
+  }
 
   const filteredRivers = COLORADO_RIVERS.filter(r => r.toLowerCase().includes(riverSearch.toLowerCase()))
 
@@ -104,6 +136,7 @@ export default function LogPage() {
     if (!user) { router.push('/auth/login'); return }
 
     const { error } = await supabase.from('log_entries').insert({
+      id: entryId,
       user_id: user.id,
       date,
       river,
@@ -266,20 +299,72 @@ export default function LogPage() {
         )}
 
         {step === 'notes' && (
-          <div style={{ marginTop: 28 }}>
-            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>
-              Add any notes about this trip — conditions, highlights, client details. Optional.
-            </p>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. High water, Class IV conditions. Group of 6. Excellent visibility…"
-              rows={7}
-              className="input-river"
-              style={{ resize: 'none', lineHeight: 1.6 }}
-            />
-            <div style={{ textAlign: 'right', fontSize: 12, color: '#334155', marginTop: 6 }}>
-              {notes.length} characters
+          <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Notes */}
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>
+                Trip Notes <span style={{ color: '#334155', fontWeight: 400 }}>(optional)</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Conditions, highlights, client details…"
+                rows={5}
+                className="input-river"
+                style={{ resize: 'none', lineHeight: 1.6 }}
+              />
+            </div>
+
+            {/* Photos */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>
+                  Photos <span style={{ color: '#334155', fontWeight: 400 }}>(optional)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#22d3ee', background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+                >
+                  <Camera size={13} />
+                  {uploading ? 'Uploading…' : 'Add'}
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+              </div>
+
+              {photos.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ width: '100%', border: '1px dashed rgba(34,211,238,0.2)', borderRadius: 12, padding: '24px 20px', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: '#334155' }}
+                >
+                  <ImageIcon size={24} color="#1a3a5c" />
+                  <span style={{ fontSize: 13 }}>Tap to add photos</span>
+                </button>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                  {photos.map((p, i) => (
+                    <div key={p.path} style={{ position: 'relative', aspectRatio: '1', borderRadius: 10, overflow: 'hidden' }}>
+                      <img src={p.url} alt={`Photo ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(p.path)}
+                        style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ aspectRatio: '1', border: '1px dashed rgba(34,211,238,0.2)', borderRadius: 10, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155' }}
+                  >
+                    <Camera size={18} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -315,6 +400,7 @@ export default function LogPage() {
                 ['Company', companyName],
                 ['ROL License', rolLicense],
                 ...(notes.trim() ? [['Notes', notes.trim()]] : []),
+                ...(photos.length ? [['Photos', `${photos.length} photo${photos.length > 1 ? 's' : ''}`]] : []),
               ].map(([label, value], i, arr) => (
                 <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 18px', borderBottom: i < arr.length - 1 ? '1px solid rgba(34,211,238,0.08)' : 'none' }}>
                   <span style={{ fontSize: 13, color: '#475569' }}>{String(label)}</span>
