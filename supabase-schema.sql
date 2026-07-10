@@ -32,6 +32,8 @@ create table public.log_entries (
   miles numeric(6,2) not null check (miles >= 0),
   company_name text not null default '',
   rol_license text not null default '',
+  notes text,
+  cfs numeric(8,1),
   created_at timestamptz not null default now()
 );
 

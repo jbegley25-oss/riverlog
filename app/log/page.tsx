@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Check, Camera, ImageIcon, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
+import { FLOW_SECTIONS, fetchLatestCfs, usgsGraphUrl } from '@/lib/usgs'
 
-type Step = 'date' | 'type' | 'river' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
-const ALL_STEPS: Step[] = ['date', 'type', 'river', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
-const PRIVATE_STEPS: Step[] = ['date', 'type', 'river', 'location', 'boat', 'hours', 'miles', 'notes', 'review']
+type Step = 'date' | 'type' | 'river' | 'flow' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
+const ALL_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
+const PRIVATE_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'boat', 'hours', 'miles', 'notes', 'review']
 
 const STEP_LABELS: Record<Step, string> = {
   date: 'Date',
   type: 'Trip Type',
   river: 'River',
+  flow: 'River Flow',
   location: 'Put-in & Take-out',
   boat: 'Boat Type',
   role: 'Your Role',
@@ -23,6 +25,8 @@ const STEP_LABELS: Record<Step, string> = {
   company: 'Company & License',
   review: 'Review & Save',
 }
+
+const MILE_PRESETS = [3, 5, 6, 8, 10, 12, 15, 18]
 
 const COMPANY_NAME = 'Sage Outdoor Adventures'
 const ROL_LICENSE = '653'
@@ -75,6 +79,13 @@ export default function LogPage() {
   const [miles, setMiles] = useState('')
   const [notes, setNotes] = useState('')
 
+  // River flow (CFS) — only offered for known monitored sections
+  const [flowSectionId, setFlowSectionId] = useState('')
+  const [cfs, setCfs] = useState('')
+  const [cfsTimestamp, setCfsTimestamp] = useState<string | null>(null)
+  const [cfsLoading, setCfsLoading] = useState(false)
+  const [cfsError, setCfsError] = useState('')
+
   // Company/ROL hardcoded for all users; editable on the company step if needed
   const [companyName, setCompanyName] = useState(COMPANY_NAME)
   const [rolLicense, setRolLicense] = useState(ROL_LICENSE)
@@ -113,11 +124,41 @@ export default function LogPage() {
 
   const filteredRivers = COLORADO_RIVERS.filter(r => r.toLowerCase().includes(riverSearch.toLowerCase()))
 
+  function selectFlowSection(id: string) {
+    if (id === flowSectionId) {
+      // Deselect
+      setFlowSectionId('')
+      setCfs('')
+      setCfsTimestamp(null)
+      setCfsError('')
+      return
+    }
+    setFlowSectionId(id)
+    setCfs('')
+    setCfsTimestamp(null)
+    setCfsError('')
+    const section = FLOW_SECTIONS.find(s => s.id === id)
+    if (!section) return
+    setCfsLoading(true)
+    fetchLatestCfs(section.usgsSiteId)
+      .then(reading => {
+        if (reading) {
+          setCfs(String(reading.value))
+          setCfsTimestamp(reading.dateTime)
+        } else {
+          setCfsError('Could not load current reading — enter it manually.')
+        }
+      })
+      .catch(() => setCfsError('Could not load current reading — enter it manually.'))
+      .finally(() => setCfsLoading(false))
+  }
+
   function canAdvance() {
     switch (step) {
       case 'date': return !!date
       case 'type': return !!tripType
       case 'river': return !!river
+      case 'flow': return true
       case 'location': return !!putIn && !!takeOut
       case 'boat': return !!boatType
       case 'role': return !!role
@@ -167,6 +208,7 @@ export default function LogPage() {
       company_name: tripType === 'private' ? 'PRIVATE' : companyName,
       rol_license: tripType === 'private' ? '' : rolLicense,
       notes: notes.trim() || null,
+      cfs: cfs.trim() ? parseFloat(cfs) : null,
     })
 
     if (error) {
@@ -255,6 +297,59 @@ export default function LogPage() {
           </div>
         )}
 
+        {step === 'flow' && (
+          <div style={{ marginTop: 28 }}>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 14 }}>Is this trip on a monitored section? We'll pull the current flow for you.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {FLOW_SECTIONS.map(s => (
+                <button key={s.id} onClick={() => selectFlowSection(s.id)}
+                  className={`pill-option ${flowSectionId === s.id ? 'selected' : ''}`}
+                  style={{ borderRadius: 12, padding: '14px 18px', textAlign: 'left', fontSize: 15 }}>
+                  <div style={{ fontWeight: 600 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: flowSectionId === s.id ? '#0891b2' : '#334155', marginTop: 2 }}>{s.usgsSiteName}</div>
+                </button>
+              ))}
+            </div>
+
+            {flowSectionId && (
+              <div className="glass" style={{ borderRadius: 14, padding: '18px', textAlign: 'center' }}>
+                {cfsLoading ? (
+                  <p style={{ color: '#475569', fontSize: 14 }}>Loading current flow…</p>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
+                      <input type="number" value={cfs} onChange={e => setCfs(e.target.value)}
+                        placeholder="0" className="input-river"
+                        style={{ fontSize: 28, fontWeight: 700, textAlign: 'center', padding: '12px', width: 140 }} />
+                      <span style={{ fontSize: 18, color: '#475569', fontWeight: 600 }}>cfs</span>
+                    </div>
+                    {cfsTimestamp && (
+                      <p style={{ fontSize: 12, color: '#334155', marginBottom: 14 }}>
+                        USGS reading as of {new Date(cfsTimestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                    )}
+                    {cfsError && (
+                      <p style={{ fontSize: 12, color: '#fca5a5', marginBottom: 14 }}>{cfsError}</p>
+                    )}
+                    <img
+                      src={usgsGraphUrl(FLOW_SECTIONS.find(s => s.id === flowSectionId)!.usgsSiteId)}
+                      alt={`${FLOW_SECTIONS.find(s => s.id === flowSectionId)!.label} — last 7 days flow`}
+                      style={{ width: '100%', borderRadius: 8, background: '#fff' }}
+                    />
+                    <a
+                      href={FLOW_SECTIONS.find(s => s.id === flowSectionId)!.monitoringUrl}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'inline-block', marginTop: 12, fontSize: 12, color: '#22d3ee' }}
+                    >
+                      View full USGS page ↗
+                    </a>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {step === 'location' && (
           <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
@@ -330,6 +425,14 @@ export default function LogPage() {
                 placeholder="0.0" min="0" step="0.5" className="input-river"
                 style={{ fontSize: 32, fontWeight: 700, textAlign: 'center', padding: '20px' }} />
               <span style={{ fontSize: 24, color: '#475569', fontWeight: 600 }}>mi</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              {MILE_PRESETS.map(m => (
+                <button key={m} onClick={() => setMiles(String(m))}
+                  style={{ flex: '1 0 calc(25% - 6px)', minWidth: 0, padding: '12px 8px', borderRadius: 10, background: miles === String(m) ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${miles === String(m) ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: miles === String(m) ? '#22d3ee' : '#64748b', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>
+                  {m}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -428,6 +531,7 @@ export default function LogPage() {
                 ['Trip Type', tripType === 'private' ? 'Private' : 'Commercial'],
                 ['Date', date],
                 ['River', river],
+                ...(flowSectionId && cfs.trim() ? [['River Flow', `${cfs} cfs (${FLOW_SECTIONS.find(s => s.id === flowSectionId)!.label})`]] : []),
                 ['Put-in', putIn],
                 ['Take-out', takeOut],
                 ['Boat Type', BOAT_LABELS[boatType as BoatType]],

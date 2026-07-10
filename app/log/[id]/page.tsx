@@ -31,6 +31,7 @@ type EditForm = {
   notes: string
   company_name: string
   rol_license: string
+  cfs: string
 }
 
 const inputStyle: React.CSSProperties = {
@@ -114,6 +115,7 @@ export default function EntryPage() {
       notes: entry.notes ?? '',
       company_name: entry.company_name,
       rol_license: entry.rol_license,
+      cfs: entry.cfs != null ? String(entry.cfs) : '',
     })
     setEditing(true)
     setConfirmDelete(false)
@@ -145,6 +147,7 @@ export default function EntryPage() {
       notes: editForm.notes.trim() || null,
       company_name: isPrivate ? 'PRIVATE' : editForm.company_name,
       rol_license: isPrivate ? '' : editForm.rol_license,
+      cfs: editForm.cfs.trim() ? parseFloat(editForm.cfs) : null,
     }
     const { error } = await supabase.from('log_entries').update(updates).eq('id', id)
     if (!error) {
@@ -203,6 +206,7 @@ export default function EntryPage() {
     ['Date', format(new Date(entry.date + 'T00:00:00'), 'MMMM d, yyyy')],
     ['Trip Type', isPrivate ? 'Private' : 'Commercial'],
     ['River', entry.river],
+    ...(entry.cfs != null ? [['River Flow', `${entry.cfs} cfs`]] : []),
     ['Put-in', entry.put_in],
     ['Take-out', entry.take_out],
     ['Boat Type', BOAT_LABELS[entry.boat_type]],
@@ -283,6 +287,10 @@ export default function EntryPage() {
 
             <Field label="River">
               <input type="text" style={inputStyle} value={editForm.river} onChange={e => setField('river', e.target.value)} placeholder="River name" />
+            </Field>
+
+            <Field label="River Flow (CFS)">
+              <input type="number" style={inputStyle} value={editForm.cfs} onChange={e => setField('cfs', e.target.value)} placeholder="Optional" />
             </Field>
 
             <Field label="Put-in">
