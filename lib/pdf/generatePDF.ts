@@ -29,7 +29,23 @@ function text(doc: Doc, str: string, x: number, y: number, opts?: { size?: numbe
   doc.text(str, x, y, { align: opts?.align ?? 'left' })
 }
 
-function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum: number, totalPages: number) {
+type Totals = {
+  guide_h: number; tl_h: number; gi_h: number; priv_h: number
+  guide_mi: number; tl_mi: number; gi_mi: number; priv_mi: number
+}
+
+function computeTotals(entries: LogEntry[]): Totals {
+  const sum = (role: string, key: 'hours' | 'miles') =>
+    entries.filter(e => e.role === role).reduce((s, e) => s + e[key], 0)
+  return {
+    guide_h: sum('guide', 'hours'), tl_h: sum('trip_leader', 'hours'),
+    gi_h: sum('guide_instructor', 'hours'), priv_h: sum('private', 'hours'),
+    guide_mi: sum('guide', 'miles'), tl_mi: sum('trip_leader', 'miles'),
+    gi_mi: sum('guide_instructor', 'miles'), priv_mi: sum('private', 'miles'),
+  }
+}
+
+function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum: number, totalPages: number, grandTotals?: Totals) {
   const M = 10  // margin
   const PW = 210 // page width (A4 mm)
   const COL = PW - M * 2 // content width
@@ -178,6 +194,26 @@ function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum
   text(doc, `As Guide Instructor: ${gi_h.toFixed(1)}`, M + 88, totY + 13, { size: 6.5 })
   text(doc, `Private: ${priv_h.toFixed(1)}`, M + 136, totY + 13, { size: 6.5 })
 
+  // Grand totals box (all logged trips) — rendered on the last page only
+  if (grandTotals) {
+    const gY = totY + 18
+    doc.setFillColor(20, 20, 20)
+    doc.rect(M, gY, COL, 5, 'F')
+    text(doc, `GRAND TOTALS — ALL LOGGED TRIPS (${totalPages} sheet${totalPages > 1 ? 's' : ''})`, M + 2, gY + 3.5, { bold: true, size: 7 })
+
+    doc.setFillColor(240, 240, 240)
+    doc.rect(M, gY + 5, COL, 10, 'FD')
+    text(doc, `River Miles as Guide: ${grandTotals.guide_mi.toFixed(1)}`, M + 2, gY + 9, { size: 6.5, bold: true })
+    text(doc, `As Trip Leader: ${grandTotals.tl_mi.toFixed(1)}`, M + 44, gY + 9, { size: 6.5, bold: true })
+    text(doc, `As Guide Instructor: ${grandTotals.gi_mi.toFixed(1)}`, M + 88, gY + 9, { size: 6.5, bold: true })
+    text(doc, `Private: ${grandTotals.priv_mi.toFixed(1)}`, M + 136, gY + 9, { size: 6.5, bold: true })
+
+    text(doc, `Hours as Guide: ${grandTotals.guide_h.toFixed(1)}`, M + 2, gY + 13, { size: 6.5, bold: true })
+    text(doc, `As Trip Leader: ${grandTotals.tl_h.toFixed(1)}`, M + 44, gY + 13, { size: 6.5, bold: true })
+    text(doc, `As Guide Instructor: ${grandTotals.gi_h.toFixed(1)}`, M + 88, gY + 13, { size: 6.5, bold: true })
+    text(doc, `Private: ${grandTotals.priv_h.toFixed(1)}`, M + 136, gY + 13, { size: 6.5, bold: true })
+  }
+
   // Page number
   text(doc, `Page ${pageNum} of ${totalPages}`, PW / 2, 295, { size: 7, align: 'center' })
 }
@@ -190,11 +226,13 @@ export async function generateLogSheetPDF(profile: Profile, entries: LogEntry[])
   const totalPages = Math.ceil(entries.length / entriesPerPage)
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const grandTotals = computeTotals(entries)
 
   for (let p = 0; p < totalPages; p++) {
     if (p > 0) doc.addPage()
     const pageEntries = entries.slice(p * entriesPerPage, (p + 1) * entriesPerPage)
-    renderPage(doc, profile, pageEntries, p + 1, totalPages)
+    const isLastPage = p === totalPages - 1
+    renderPage(doc, profile, pageEntries, p + 1, totalPages, isLastPage ? grandTotals : undefined)
   }
 
   return doc.output('blob')
