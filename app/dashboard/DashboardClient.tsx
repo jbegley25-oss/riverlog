@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Waves, Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
+import Confetti from '@/components/Confetti'
 
 const ROLE_LABELS: Record<string, string> = {
   guide: 'Guide',
@@ -36,8 +37,60 @@ export default function DashboardClient({ profile, entries, totals }: {
   totals: Totals
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const totalHours = totals.hours_as_guide + totals.hours_as_trip_leader + totals.hours_as_guide_instructor + totals.hours_private
   const totalMiles = totals.miles_as_guide + totals.miles_as_trip_leader + totals.miles_as_guide_instructor + totals.miles_private
+
+  // Celebration state — set once on mount from the log wizard's redirect params
+  const celebrateRef = useRef(searchParams.get('celebrate') === '1')
+  const addedHours = celebrateRef.current ? parseFloat(searchParams.get('hours') || '0') || 0 : 0
+  const addedMiles = celebrateRef.current ? parseFloat(searchParams.get('miles') || '0') || 0 : 0
+  const addedRole = searchParams.get('role')
+  const [showConfetti, setShowConfetti] = useState(celebrateRef.current)
+  const [progress, setProgress] = useState(celebrateRef.current ? 0 : 1)
+
+  useEffect(() => {
+    if (!celebrateRef.current) return
+    router.replace('/dashboard', { scroll: false })
+
+    const duration = 1400
+    const start = performance.now()
+    let raf: number
+    function tick(now: number) {
+      const t = Math.min((now - start) / duration, 1)
+      setProgress(1 - Math.pow(1 - t, 3)) // ease-out cubic
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Interpolates from (final - delta) up to final as `progress` goes 0 -> 1
+  function anim(final: number, delta: number) {
+    return final - delta * (1 - progress)
+  }
+
+  const guideHoursDelta = addedRole === 'guide' ? addedHours : 0
+  const guideMilesDelta = addedRole === 'guide' ? addedMiles : 0
+  const tripLeaderHoursDelta = addedRole === 'trip_leader' ? addedHours : 0
+  const tripLeaderMilesDelta = addedRole === 'trip_leader' ? addedMiles : 0
+  const guideInstructorHoursDelta = addedRole === 'guide_instructor' ? addedHours : 0
+  const guideInstructorMilesDelta = addedRole === 'guide_instructor' ? addedMiles : 0
+  const privateHoursDelta = addedRole === 'private' ? addedHours : 0
+  const privateMilesDelta = addedRole === 'private' ? addedMiles : 0
+
+  const displayedTotalHours = anim(totalHours, addedHours)
+  const displayedTotalMiles = anim(totalMiles, addedMiles)
+  const displayedGuideHours = anim(totals.hours_as_guide, guideHoursDelta)
+  const displayedGuideMiles = anim(totals.miles_as_guide, guideMilesDelta)
+  const displayedTripLeaderHours = anim(totals.hours_as_trip_leader, tripLeaderHoursDelta)
+  const displayedTripLeaderMiles = anim(totals.miles_as_trip_leader, tripLeaderMilesDelta)
+  const displayedGuideInstructorHours = anim(totals.hours_as_guide_instructor, guideInstructorHoursDelta)
+  const displayedGuideInstructorMiles = anim(totals.miles_as_guide_instructor, guideInstructorMilesDelta)
+  const displayedPrivateHours = anim(totals.hours_private, privateHoursDelta)
+  const displayedPrivateMiles = anim(totals.miles_private, privateMilesDelta)
+  const displayedTripsCount = Math.round(anim(entries.length, celebrateRef.current ? 1 : 0))
 
   async function handleLogout() {
     const supabase = createClient()
@@ -48,6 +101,8 @@ export default function DashboardClient({ profile, entries, totals }: {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a1628' }}>
+      {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
+
       {/* Header — padded for PWA status bar */}
       <div style={{ background: 'rgba(13,31,60,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(34,211,238,0.1)', position: 'sticky', top: 0, zIndex: 50, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
@@ -81,10 +136,10 @@ export default function DashboardClient({ profile, entries, totals }: {
 
         {/* Stats grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
-          <StatCard label="Total Hours" value={totalHours.toFixed(1)} sub="on river" />
-          <StatCard label="Total Miles" value={totalMiles.toFixed(1)} sub="river miles" />
-          <StatCard label="Guide Hours" value={totals.hours_as_guide.toFixed(1)} sub={`${totals.miles_as_guide.toFixed(1)} mi`} />
-          <StatCard label="Trips Logged" value={entries.length} sub="entries" />
+          <StatCard label="Total Hours" value={displayedTotalHours.toFixed(1)} sub="on river" />
+          <StatCard label="Total Miles" value={displayedTotalMiles.toFixed(1)} sub="river miles" />
+          <StatCard label="Guide Hours" value={displayedGuideHours.toFixed(1)} sub={`${displayedGuideMiles.toFixed(1)} mi`} />
+          <StatCard label="Trips Logged" value={displayedTripsCount} sub="entries" />
         </div>
 
         {/* Breakdown */}
@@ -93,10 +148,10 @@ export default function DashboardClient({ profile, entries, totals }: {
             <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Hour Breakdown</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                ['As Guide', totals.hours_as_guide, totals.miles_as_guide],
-                ['As Trip Leader', totals.hours_as_trip_leader, totals.miles_as_trip_leader],
-                ['As Guide Instructor', totals.hours_as_guide_instructor, totals.miles_as_guide_instructor],
-                ['Private', totals.hours_private, totals.miles_private],
+                ['As Guide', displayedGuideHours, displayedGuideMiles],
+                ['As Trip Leader', displayedTripLeaderHours, displayedTripLeaderMiles],
+                ['As Guide Instructor', displayedGuideInstructorHours, displayedGuideInstructorMiles],
+                ['Private', displayedPrivateHours, displayedPrivateMiles],
               ].filter(([, h]) => (h as number) > 0).map(([label, hours, miles]) => (
                 <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 14, color: '#94a3b8' }}>{String(label)}</span>

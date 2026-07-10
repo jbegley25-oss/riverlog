@@ -173,7 +173,8 @@ export default function LogPage() {
       setError(error.message)
       setSaving(false)
     } else {
-      router.push('/dashboard')
+      const params = new URLSearchParams({ celebrate: '1', hours, miles, role })
+      router.push(`/dashboard?${params.toString()}`)
       router.refresh()
     }
   }
