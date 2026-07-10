@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
+import InstallPromptBanner from '@/components/InstallPromptBanner'
 
 export const metadata: Metadata = {
   title: 'RiverLog — On-River Hour Tracker',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="h-full">
       <body className="min-h-full flex flex-col" style={{ background: '#0a1628' }}>
         <ServiceWorkerRegistrar />
+        <InstallPromptBanner />
         {children}
       </body>
     </html>
