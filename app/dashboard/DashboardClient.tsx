@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
 import Confetti from '@/components/Confetti'
+import IconUpdateBanner from '@/components/IconUpdateBanner'
 
 const ROLE_LABELS: Record<string, string> = {
   guide: 'Guide',
@@ -124,6 +125,8 @@ export default function DashboardClient({ profile, entries, totals }: {
       </div>
 
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 100px' }}>
+        <IconUpdateBanner />
+
         {/* Greeting */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: '#fff', marginBottom: 4 }}>
