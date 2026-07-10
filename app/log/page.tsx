@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Check, Camera, ImageIcon, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
-import { FLOW_SECTIONS, fetchLatestCfs, usgsGraphUrl } from '@/lib/usgs'
+import { FLOW_SECTIONS, fetchLatestCfs, usgsGraphUrl, searchUsgsSites, usgsMonitoringUrl, UsgsSite } from '@/lib/usgs'
 
 type Step = 'date' | 'type' | 'river' | 'flow' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
 const ALL_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
@@ -79,8 +79,12 @@ export default function LogPage() {
   const [miles, setMiles] = useState('')
   const [notes, setNotes] = useState('')
 
-  // River flow (CFS) — only offered for known monitored sections
+  // River flow (CFS) — quick-select for known sections, or search any active CO gauge
   const [flowSectionId, setFlowSectionId] = useState('')
+  const [customFlow, setCustomFlow] = useState<UsgsSite | null>(null)
+  const [siteSearch, setSiteSearch] = useState('')
+  const [siteResults, setSiteResults] = useState<UsgsSite[]>([])
+  const [siteSearching, setSiteSearching] = useState(false)
   const [cfs, setCfs] = useState('')
   const [cfsTimestamp, setCfsTimestamp] = useState<string | null>(null)
   const [cfsLoading, setCfsLoading] = useState(false)
@@ -124,23 +128,25 @@ export default function LogPage() {
 
   const filteredRivers = COLORADO_RIVERS.filter(r => r.toLowerCase().includes(riverSearch.toLowerCase()))
 
-  function selectFlowSection(id: string) {
-    if (id === flowSectionId) {
-      // Deselect
-      setFlowSectionId('')
-      setCfs('')
-      setCfsTimestamp(null)
-      setCfsError('')
-      return
-    }
-    setFlowSectionId(id)
+  // Search all active Colorado USGS gauges for sections beyond the two quick-select defaults
+  useEffect(() => {
+    const q = siteSearch.trim()
+    if (q.length < 2) { setSiteResults([]); return }
+    setSiteSearching(true)
+    const handle = setTimeout(() => {
+      searchUsgsSites(q)
+        .then(setSiteResults)
+        .finally(() => setSiteSearching(false))
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [siteSearch])
+
+  function loadCfsFor(siteId: string) {
     setCfs('')
     setCfsTimestamp(null)
     setCfsError('')
-    const section = FLOW_SECTIONS.find(s => s.id === id)
-    if (!section) return
     setCfsLoading(true)
-    fetchLatestCfs(section.usgsSiteId)
+    fetchLatestCfs(siteId)
       .then(reading => {
         if (reading) {
           setCfs(String(reading.value))
@@ -152,6 +158,47 @@ export default function LogPage() {
       .catch(() => setCfsError('Could not load current reading — enter it manually.'))
       .finally(() => setCfsLoading(false))
   }
+
+  function selectFlowSection(id: string) {
+    if (id === flowSectionId) {
+      // Deselect
+      setFlowSectionId('')
+      setCfs('')
+      setCfsTimestamp(null)
+      setCfsError('')
+      return
+    }
+    setFlowSectionId(id)
+    setCustomFlow(null)
+    const section = FLOW_SECTIONS.find(s => s.id === id)
+    if (!section) return
+    loadCfsFor(section.usgsSiteId)
+  }
+
+  function selectCustomSite(site: UsgsSite) {
+    setFlowSectionId('')
+    setCustomFlow(site)
+    setSiteSearch('')
+    setSiteResults([])
+    loadCfsFor(site.siteId)
+  }
+
+  function clearFlow() {
+    setFlowSectionId('')
+    setCustomFlow(null)
+    setCfs('')
+    setCfsTimestamp(null)
+    setCfsError('')
+  }
+
+  const activeFlow = flowSectionId
+    ? (() => {
+        const s = FLOW_SECTIONS.find(f => f.id === flowSectionId)!
+        return { siteId: s.usgsSiteId, label: s.label, monitoringUrl: s.monitoringUrl }
+      })()
+    : customFlow
+    ? { siteId: customFlow.siteId, label: customFlow.name, monitoringUrl: usgsMonitoringUrl(customFlow.siteId) }
+    : null
 
   function canAdvance() {
     switch (step) {
@@ -300,7 +347,7 @@ export default function LogPage() {
         {step === 'flow' && (
           <div style={{ marginTop: 28 }}>
             <p style={{ color: '#64748b', fontSize: 14, marginBottom: 14 }}>Is this trip on a monitored section? We'll pull the current flow for you.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
               {FLOW_SECTIONS.map(s => (
                 <button key={s.id} onClick={() => selectFlowSection(s.id)}
                   className={`pill-option ${flowSectionId === s.id ? 'selected' : ''}`}
@@ -309,9 +356,47 @@ export default function LogPage() {
                   <div style={{ fontSize: 12, color: flowSectionId === s.id ? '#0891b2' : '#334155', marginTop: 2 }}>{s.usgsSiteName}</div>
                 </button>
               ))}
+
+              {customFlow && (
+                <div className={`pill-option selected`}
+                  style={{ borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{customFlow.name}</div>
+                    <div style={{ fontSize: 12, color: '#0891b2', marginTop: 2 }}>USGS {customFlow.siteId}</div>
+                  </div>
+                  <button onClick={clearFlow} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {flowSectionId && (
+            <div style={{ marginBottom: 20 }}>
+              <input
+                value={siteSearch}
+                onChange={e => setSiteSearch(e.target.value)}
+                placeholder="Search other USGS gauges (e.g. Arkansas, Gunnison)…"
+                className="input-river"
+              />
+              {siteSearching && (
+                <p style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>Searching…</p>
+              )}
+              {!siteSearching && siteResults.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                  {siteResults.map(s => (
+                    <button key={s.siteId} onClick={() => selectCustomSite(s)}
+                      style={{ textAlign: 'left', background: 'rgba(10,22,40,0.6)', border: '1px solid rgba(34,211,238,0.15)', borderRadius: 10, padding: '10px 14px', color: '#94a3b8', cursor: 'pointer', fontSize: 13 }}>
+                      {s.name} <span style={{ color: '#334155' }}>· USGS {s.siteId}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!siteSearching && siteSearch.trim().length >= 2 && siteResults.length === 0 && (
+                <p style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>No matching gauges found.</p>
+              )}
+            </div>
+
+            {activeFlow && (
               <div className="glass" style={{ borderRadius: 14, padding: '18px', textAlign: 'center' }}>
                 {cfsLoading ? (
                   <p style={{ color: '#475569', fontSize: 14 }}>Loading current flow…</p>
@@ -332,12 +417,12 @@ export default function LogPage() {
                       <p style={{ fontSize: 12, color: '#fca5a5', marginBottom: 14 }}>{cfsError}</p>
                     )}
                     <img
-                      src={usgsGraphUrl(FLOW_SECTIONS.find(s => s.id === flowSectionId)!.usgsSiteId)}
-                      alt={`${FLOW_SECTIONS.find(s => s.id === flowSectionId)!.label} — last 7 days flow`}
+                      src={usgsGraphUrl(activeFlow.siteId)}
+                      alt={`${activeFlow.label} — last 7 days flow`}
                       style={{ width: '100%', borderRadius: 8, background: '#fff' }}
                     />
                     <a
-                      href={FLOW_SECTIONS.find(s => s.id === flowSectionId)!.monitoringUrl}
+                      href={activeFlow.monitoringUrl}
                       target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-block', marginTop: 12, fontSize: 12, color: '#22d3ee' }}
                     >
@@ -531,7 +616,7 @@ export default function LogPage() {
                 ['Trip Type', tripType === 'private' ? 'Private' : 'Commercial'],
                 ['Date', date],
                 ['River', river],
-                ...(flowSectionId && cfs.trim() ? [['River Flow', `${cfs} cfs (${FLOW_SECTIONS.find(s => s.id === flowSectionId)!.label})`]] : []),
+                ...(activeFlow && cfs.trim() ? [['River Flow', `${cfs} cfs (${activeFlow.label})`]] : []),
                 ['Put-in', putIn],
                 ['Take-out', takeOut],
                 ['Boat Type', BOAT_LABELS[boatType as BoatType]],
