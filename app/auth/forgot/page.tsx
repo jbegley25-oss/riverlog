@@ -15,9 +15,12 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const supabase = createClient()
+    // Implicit flow: the reset link delivers session tokens directly (as a URL
+    // hash fragment), so it works even if opened in a different browser/device
+    // than where it was requested — no server-side code exchange needed.
+    const supabase = createClient({ flowType: 'implicit' })
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
+      redirectTo: `${window.location.origin}/auth/update-password`,
     })
     if (error) {
       setError(error.message)

@@ -17,10 +17,31 @@ export default function UpdatePasswordPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true)
-      else setError('This reset link is invalid or has expired. Request a new one.')
+    let settled = false
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        settled = true
+        setReady(true)
+      }
     })
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        settled = true
+        setReady(true)
+      }
+    })
+
+    // Give the SDK time to parse the recovery tokens out of the URL hash before giving up.
+    const timeout = setTimeout(() => {
+      if (!settled) setError('This reset link is invalid or has expired. Request a new one.')
+    }, 2000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   async function handleUpdate(e: React.FormEvent) {
