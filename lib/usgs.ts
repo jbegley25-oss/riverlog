@@ -10,16 +10,18 @@ export const FLOW_SECTIONS: FlowSection[] = [
   {
     id: 'shoshone',
     label: 'Shoshone',
-    usgsSiteId: '09085100',
-    usgsSiteName: 'Colorado River below Glenwood Springs, CO',
-    monitoringUrl: 'https://waterdata.usgs.gov/monitoring-location/USGS-09085100/#dataTypeId=continuous-00065-0&period=P7D&showFieldMeasurements=true',
+    // Shoshone has no gauge of its own — American Whitewater and local guides use
+    // the Dotsero gauge as the standard proxy reading for this run.
+    usgsSiteId: '09070500',
+    usgsSiteName: 'Colorado River near Dotsero, CO',
+    monitoringUrl: 'https://waterdata.usgs.gov/monitoring-location/USGS-09070500/#dataTypeId=continuous-00060-0&period=P7D&showFieldMeasurements=true',
   },
   {
     id: 'dotsero',
     label: 'Upper Colorado (Dotsero)',
     usgsSiteId: '09070500',
     usgsSiteName: 'Colorado River near Dotsero, CO',
-    monitoringUrl: 'https://waterdata.usgs.gov/monitoring-location/USGS-09070500/#dataTypeId=continuous-00065-0&period=P7D&showFieldMeasurements=true',
+    monitoringUrl: 'https://waterdata.usgs.gov/monitoring-location/USGS-09070500/#dataTypeId=continuous-00060-0&period=P7D&showFieldMeasurements=true',
   },
 ]
 
