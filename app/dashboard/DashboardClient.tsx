@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings } from 'lucide-react'
+import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings, Award } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
@@ -28,6 +28,25 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
       <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: '#22d3ee', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function MilestoneTracker({ label, achieved, progressPct, detail }: { label: string; achieved: boolean; progressPct: number; detail: string }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>{label}</span>
+        {achieved ? (
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#22d3ee', background: 'rgba(34,211,238,0.12)', borderRadius: 4, padding: '2px 8px' }}>Achieved</span>
+        ) : (
+          <span style={{ fontSize: 12, color: '#475569' }}>{progressPct.toFixed(0)}%</span>
+        )}
+      </div>
+      <div style={{ height: 8, borderRadius: 4, background: 'rgba(148,163,184,0.15)', overflow: 'hidden', marginBottom: 6 }}>
+        <div style={{ width: `${progressPct}%`, height: '100%', background: 'linear-gradient(90deg, #0891b2, #22d3ee)', borderRadius: 4 }} />
+      </div>
+      <div style={{ fontSize: 12, color: '#475569' }}>{detail}</div>
     </div>
   )
 }
@@ -99,7 +118,13 @@ export default function DashboardClient({ profile, entries, totals }: {
   const displayedCommercialHours = anim(commercialHours, commercialHoursDelta)
   const displayedCommercialMiles = anim(commercialMiles, commercialMilesDelta)
   const displayedTripsCount = Math.round(anim(entries.length, celebrateRef.current ? 1 : 0))
-  const commercialPct = displayedTotalHours > 0 ? (displayedCommercialHours / displayedTotalHours) * 100 : 0
+
+  // Milestones: Trip Leader needs 500 total mi w/ at least half (250) commercial;
+  // Guide Instructor needs 1,500 commercial mi.
+  const tripLeaderAchieved = displayedTotalMiles >= 500 && displayedCommercialMiles >= 250
+  const tripLeaderProgressPct = Math.min(100, Math.min(displayedTotalMiles / 500, displayedCommercialMiles / 250) * 100)
+  const instructorAchieved = displayedCommercialMiles >= 1500
+  const instructorProgressPct = Math.min(100, (displayedCommercialMiles / 1500) * 100)
 
   async function handleLogout() {
     const supabase = createClient()
@@ -154,9 +179,6 @@ export default function DashboardClient({ profile, entries, totals }: {
         {/* Commercial vs Private breakdown */}
         <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Commercial vs Private</div>
-          <div style={{ height: 8, borderRadius: 4, background: 'rgba(148,163,184,0.15)', overflow: 'hidden', marginBottom: 14 }}>
-            <div style={{ width: `${commercialPct}%`, height: '100%', background: 'linear-gradient(90deg, #0891b2, #22d3ee)', borderRadius: 4 }} />
-          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
               ['Commercial', displayedCommercialHours, displayedCommercialMiles],
@@ -169,14 +191,27 @@ export default function DashboardClient({ profile, entries, totals }: {
                 </span>
               </div>
             ))}
-            <div style={{ height: 1, background: 'rgba(148,163,184,0.15)', margin: '2px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 700 }}>Total</span>
-              <span style={{ fontSize: 14, color: '#22d3ee', fontWeight: 700 }}>
-                {displayedTotalHours.toFixed(1)}h · {displayedTotalMiles.toFixed(1)}mi
-              </span>
-            </div>
           </div>
+        </div>
+
+        {/* Milestones */}
+        <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+            <Award size={14} color="#475569" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Milestones</span>
+          </div>
+          <MilestoneTracker
+            label="Trip Leader"
+            achieved={tripLeaderAchieved}
+            progressPct={tripLeaderProgressPct}
+            detail={`${displayedTotalMiles.toFixed(0)} / 500 mi total · ${displayedCommercialMiles.toFixed(0)} / 250 mi commercial`}
+          />
+          <MilestoneTracker
+            label="Guide Instructor"
+            achieved={instructorAchieved}
+            progressPct={instructorProgressPct}
+            detail={`${displayedCommercialMiles.toFixed(0)} / 1,500 commercial mi`}
+          />
         </div>
 
         {/* Breakdown */}
