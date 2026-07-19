@@ -38,6 +38,29 @@ const COLORADO_RIVERS = [
   'North Platte', 'Rio Grande', 'South Platte', 'Green River',
 ]
 
+const LOCATION_PRESETS: Record<string, { putIn?: string; putInOptions?: string[]; takeOut?: string; takeOutOptions?: string[] }> = {
+  shoshone: { putIn: 'Shoshone', takeOutOptions: ['Grizzly Creek', 'Two Rivers'] },
+  dotsero: { putInOptions: ['Horse Creek', 'Cottonwood', 'Lyons Gulch'], takeOut: 'Dotsero' },
+}
+
+function LocationOptionButtons({ options, value, onSelect }: { options: string[]; value: string; onSelect: (v: string) => void }) {
+  const isOther = value !== '' && !options.includes(value)
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+      {options.map(opt => (
+        <button key={opt} type="button" onClick={() => onSelect(opt)}
+          style={{ padding: '10px 16px', borderRadius: 10, background: value === opt ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${value === opt ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: value === opt ? '#22d3ee' : '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: value === opt ? 600 : 400 }}>
+          {opt}
+        </button>
+      ))}
+      <button type="button" onClick={() => onSelect('')}
+        style={{ padding: '10px 16px', borderRadius: 10, background: isOther ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${isOther ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: isOther ? '#22d3ee' : '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: isOther ? 600 : 400 }}>
+        Other
+      </button>
+    </div>
+  )
+}
+
 const ROLE_LABELS: Record<GuideRole, string> = {
   guide: 'Guide',
   trip_leader: 'Trip Leader',
@@ -190,6 +213,13 @@ export default function LogPage() {
     setCfsTimestamp(null)
     setCfsError('')
   }
+
+  // Auto-fill the fixed side of put-in/take-out when a known flow section is picked
+  useEffect(() => {
+    const preset = LOCATION_PRESETS[flowSectionId]
+    if (preset?.putIn) setPutIn(preset.putIn)
+    if (preset?.takeOut) setTakeOut(preset.takeOut)
+  }, [flowSectionId])
 
   const activeFlow = flowSectionId
     ? (() => {
@@ -435,20 +465,29 @@ export default function LogPage() {
           </div>
         )}
 
-        {step === 'location' && (
-          <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Put-in Location</label>
-              <input value={putIn} onChange={e => setPutIn(e.target.value)}
-                placeholder="e.g. Browns Canyon, Nathrop" className="input-river" />
+        {step === 'location' && (() => {
+          const preset = LOCATION_PRESETS[flowSectionId]
+          return (
+            <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Put-in Location</label>
+                {preset?.putInOptions && (
+                  <LocationOptionButtons options={preset.putInOptions} value={putIn} onSelect={setPutIn} />
+                )}
+                <input value={putIn} onChange={e => setPutIn(e.target.value)}
+                  placeholder="e.g. Browns Canyon, Nathrop" className="input-river" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Take-out Location</label>
+                {preset?.takeOutOptions && (
+                  <LocationOptionButtons options={preset.takeOutOptions} value={takeOut} onSelect={setTakeOut} />
+                )}
+                <input value={takeOut} onChange={e => setTakeOut(e.target.value)}
+                  placeholder="e.g. Hecla Junction" className="input-river" />
+              </div>
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Take-out Location</label>
-              <input value={takeOut} onChange={e => setTakeOut(e.target.value)}
-                placeholder="e.g. Hecla Junction" className="input-river" />
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {step === 'boat' && (
           <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 10 }}>
