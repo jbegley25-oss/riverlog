@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings, Award } from 'lucide-react'
+import { Plus, FileText, LogOut, ChevronRight, ChevronDown, Droplets, Clock, Map, Settings, Award } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
@@ -28,6 +28,25 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
       <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: '#22d3ee', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function CollapsibleCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, marginBottom: open ? 14 : 0, cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {icon}
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{title}</span>
+        </div>
+        <ChevronDown size={16} color="#475569" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+      {open && children}
     </div>
   )
 }
@@ -142,7 +161,7 @@ export default function DashboardClient({ profile, entries, totals }: {
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/icons/icon-192.png" alt="RiverLog" width={34} height={34} style={{ borderRadius: 10 }} />
-            <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>RiverLog</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>The River Log</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link href="/profile" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)', color: '#94a3b8', textDecoration: 'none' }}>
@@ -168,17 +187,32 @@ export default function DashboardClient({ profile, entries, totals }: {
           </p>
         </div>
 
+        {/* Milestones */}
+        <CollapsibleCard title="Milestones" icon={<Award size={14} color="#475569" />}>
+          <MilestoneTracker
+            label="Trip Leader"
+            achieved={tripLeaderAchieved}
+            progressPct={tripLeaderProgressPct}
+            detail={`${displayedTotalMiles.toFixed(0)} / 500 mi total · ${displayedCommercialMiles.toFixed(0)} / 250 mi commercial`}
+          />
+          <MilestoneTracker
+            label="Guide Instructor"
+            achieved={instructorAchieved}
+            progressPct={instructorProgressPct}
+            detail={`${displayedCommercialMiles.toFixed(0)} / 1,500 commercial mi`}
+          />
+        </CollapsibleCard>
+
         {/* Stats grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
           <StatCard label="Total Hours" value={displayedTotalHours.toFixed(1)} sub="on river" />
           <StatCard label="Total Miles" value={displayedTotalMiles.toFixed(1)} sub="river miles" />
-          <StatCard label="Guide Hours" value={displayedGuideHours.toFixed(1)} sub={`${displayedGuideMiles.toFixed(1)} mi`} />
-          <StatCard label="Trips Logged" value={displayedTripsCount} sub="entries" />
+          <StatCard label="Total Private Miles" value={displayedPrivateMiles.toFixed(1)} sub="private" />
+          <StatCard label="Total Commercial Hours" value={displayedCommercialHours.toFixed(1)} sub="commercial" />
         </div>
 
         {/* Commercial vs Private breakdown */}
-        <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Commercial vs Private</div>
+        <CollapsibleCard title="Commercial vs Private">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
               ['Commercial', displayedCommercialHours, displayedCommercialMiles],
@@ -192,27 +226,7 @@ export default function DashboardClient({ profile, entries, totals }: {
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Milestones */}
-        <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-            <Award size={14} color="#475569" />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Milestones</span>
-          </div>
-          <MilestoneTracker
-            label="Trip Leader"
-            achieved={tripLeaderAchieved}
-            progressPct={tripLeaderProgressPct}
-            detail={`${displayedTotalMiles.toFixed(0)} / 500 mi total · ${displayedCommercialMiles.toFixed(0)} / 250 mi commercial`}
-          />
-          <MilestoneTracker
-            label="Guide Instructor"
-            achieved={instructorAchieved}
-            progressPct={instructorProgressPct}
-            detail={`${displayedCommercialMiles.toFixed(0)} / 1,500 commercial mi`}
-          />
-        </div>
+        </CollapsibleCard>
 
         {/* Breakdown */}
         {(totals.hours_as_trip_leader > 0 || totals.hours_as_guide_instructor > 0) && (
@@ -258,6 +272,9 @@ export default function DashboardClient({ profile, entries, totals }: {
 
         {/* Recent entries */}
         <div>
+          <div style={{ marginBottom: 14 }}>
+            <StatCard label="Trips Logged" value={displayedTripsCount} sub="entries" />
+          </div>
           <h2 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 14 }}>
             Recent Trips {entries.length > 0 && <span style={{ color: '#475569', fontWeight: 400 }}>({entries.length})</span>}
           </h2>
