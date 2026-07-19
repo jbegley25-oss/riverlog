@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Waves } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function Home() {
@@ -34,9 +33,7 @@ export default async function Home() {
 
       <div className="relative z-10 w-full max-w-sm text-center">
         <div className="flex justify-center mb-6">
-          <div style={{ background: 'linear-gradient(135deg, #0891b2, #22d3ee)', borderRadius: 20, padding: 18 }}>
-            <Waves size={36} color="#0a1628" strokeWidth={2.5} />
-          </div>
+          <img src="/icons/icon-192.png" alt="RiverLog" width={80} height={80} style={{ borderRadius: 20 }} />
         </div>
 
         {name ? (

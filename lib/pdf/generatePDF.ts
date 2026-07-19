@@ -184,6 +184,9 @@ function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum
   const gi_mi = pageEntries.filter(e => e.role === 'guide_instructor').reduce((s, e) => s + e.miles, 0)
   const priv_mi = pageEntries.filter(e => e.role === 'private').reduce((s, e) => s + e.miles, 0)
 
+  const commercial_h = guide_h + tl_h + gi_h
+  const commercial_mi = guide_mi + tl_mi + gi_mi
+
   text(doc, `River Miles as Guide: ${guide_mi.toFixed(1)}`, M + 2, totY + 9, { size: 6.5 })
   text(doc, `As Trip Leader: ${tl_mi.toFixed(1)}`, M + 44, totY + 9, { size: 6.5 })
   text(doc, `As Guide Instructor: ${gi_mi.toFixed(1)}`, M + 88, totY + 9, { size: 6.5 })
@@ -194,15 +197,25 @@ function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum
   text(doc, `As Guide Instructor: ${gi_h.toFixed(1)}`, M + 88, totY + 13, { size: 6.5 })
   text(doc, `Private: ${priv_h.toFixed(1)}`, M + 136, totY + 13, { size: 6.5 })
 
-  // Grand totals box (all logged trips) — rendered on the last page only
+  // Commercial vs Private summary for this sheet
+  const cpY = totY + 16
+  text(doc, `Commercial: ${commercial_h.toFixed(1)}h · ${commercial_mi.toFixed(1)}mi`, M + 2, cpY, { size: 6.5, bold: true })
+  text(doc, `Private: ${priv_h.toFixed(1)}h · ${priv_mi.toFixed(1)}mi`, M + 88, cpY, { size: 6.5, bold: true })
+
+  // Grand totals box (all logged trips in this export) — rendered on every page
   if (grandTotals) {
-    const gY = totY + 18
+    const g_commercial_h = grandTotals.guide_h + grandTotals.tl_h + grandTotals.gi_h
+    const g_commercial_mi = grandTotals.guide_mi + grandTotals.tl_mi + grandTotals.gi_mi
+    const g_total_h = g_commercial_h + grandTotals.priv_h
+    const g_total_mi = g_commercial_mi + grandTotals.priv_mi
+
+    const gY = totY + 21
     doc.setFillColor(20, 20, 20)
     doc.rect(M, gY, COL, 5, 'F')
     text(doc, `GRAND TOTALS — ALL LOGGED TRIPS (${totalPages} sheet${totalPages > 1 ? 's' : ''})`, M + 2, gY + 3.5, { bold: true, size: 7 })
 
     doc.setFillColor(240, 240, 240)
-    doc.rect(M, gY + 5, COL, 10, 'FD')
+    doc.rect(M, gY + 5, COL, 15, 'FD')
     text(doc, `River Miles as Guide: ${grandTotals.guide_mi.toFixed(1)}`, M + 2, gY + 9, { size: 6.5, bold: true })
     text(doc, `As Trip Leader: ${grandTotals.tl_mi.toFixed(1)}`, M + 44, gY + 9, { size: 6.5, bold: true })
     text(doc, `As Guide Instructor: ${grandTotals.gi_mi.toFixed(1)}`, M + 88, gY + 9, { size: 6.5, bold: true })
@@ -212,6 +225,10 @@ function renderPage(doc: Doc, profile: Profile, pageEntries: LogEntry[], pageNum
     text(doc, `As Trip Leader: ${grandTotals.tl_h.toFixed(1)}`, M + 44, gY + 13, { size: 6.5, bold: true })
     text(doc, `As Guide Instructor: ${grandTotals.gi_h.toFixed(1)}`, M + 88, gY + 13, { size: 6.5, bold: true })
     text(doc, `Private: ${grandTotals.priv_h.toFixed(1)}`, M + 136, gY + 13, { size: 6.5, bold: true })
+
+    text(doc, `Commercial: ${g_commercial_h.toFixed(1)}h · ${g_commercial_mi.toFixed(1)}mi`, M + 2, gY + 17.5, { size: 6.5, bold: true })
+    text(doc, `Private: ${grandTotals.priv_h.toFixed(1)}h · ${grandTotals.priv_mi.toFixed(1)}mi`, M + 68, gY + 17.5, { size: 6.5, bold: true })
+    text(doc, `Grand Total: ${g_total_h.toFixed(1)}h · ${g_total_mi.toFixed(1)}mi`, M + 134, gY + 17.5, { size: 6.5, bold: true })
   }
 
   // Page number
@@ -231,8 +248,7 @@ export async function generateLogSheetPDF(profile: Profile, entries: LogEntry[])
   for (let p = 0; p < totalPages; p++) {
     if (p > 0) doc.addPage()
     const pageEntries = entries.slice(p * entriesPerPage, (p + 1) * entriesPerPage)
-    const isLastPage = p === totalPages - 1
-    renderPage(doc, profile, pageEntries, p + 1, totalPages, isLastPage ? grandTotals : undefined)
+    renderPage(doc, profile, pageEntries, p + 1, totalPages, grandTotals)
   }
 
   return doc.output('blob')

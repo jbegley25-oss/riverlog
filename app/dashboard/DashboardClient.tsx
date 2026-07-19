@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Waves, Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings } from 'lucide-react'
+import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
@@ -80,6 +80,11 @@ export default function DashboardClient({ profile, entries, totals }: {
   const guideInstructorMilesDelta = addedRole === 'guide_instructor' ? addedMiles : 0
   const privateHoursDelta = addedRole === 'private' ? addedHours : 0
   const privateMilesDelta = addedRole === 'private' ? addedMiles : 0
+  const commercialHoursDelta = addedRole !== 'private' ? addedHours : 0
+  const commercialMilesDelta = addedRole !== 'private' ? addedMiles : 0
+
+  const commercialHours = totals.hours_as_guide + totals.hours_as_trip_leader + totals.hours_as_guide_instructor
+  const commercialMiles = totals.miles_as_guide + totals.miles_as_trip_leader + totals.miles_as_guide_instructor
 
   const displayedTotalHours = anim(totalHours, addedHours)
   const displayedTotalMiles = anim(totalMiles, addedMiles)
@@ -91,7 +96,10 @@ export default function DashboardClient({ profile, entries, totals }: {
   const displayedGuideInstructorMiles = anim(totals.miles_as_guide_instructor, guideInstructorMilesDelta)
   const displayedPrivateHours = anim(totals.hours_private, privateHoursDelta)
   const displayedPrivateMiles = anim(totals.miles_private, privateMilesDelta)
+  const displayedCommercialHours = anim(commercialHours, commercialHoursDelta)
+  const displayedCommercialMiles = anim(commercialMiles, commercialMilesDelta)
   const displayedTripsCount = Math.round(anim(entries.length, celebrateRef.current ? 1 : 0))
+  const commercialPct = displayedTotalHours > 0 ? (displayedCommercialHours / displayedTotalHours) * 100 : 0
 
   async function handleLogout() {
     const supabase = createClient()
@@ -108,9 +116,7 @@ export default function DashboardClient({ profile, entries, totals }: {
       <div style={{ background: 'rgba(13,31,60,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(34,211,238,0.1)', position: 'sticky', top: 0, zIndex: 50, paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ background: 'linear-gradient(135deg, #0891b2, #22d3ee)', borderRadius: 10, padding: 8 }}>
-              <Waves size={18} color="#0a1628" strokeWidth={2.5} />
-            </div>
+            <img src="/icons/icon-192.png" alt="RiverLog" width={34} height={34} style={{ borderRadius: 10 }} />
             <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>RiverLog</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -143,6 +149,34 @@ export default function DashboardClient({ profile, entries, totals }: {
           <StatCard label="Total Miles" value={displayedTotalMiles.toFixed(1)} sub="river miles" />
           <StatCard label="Guide Hours" value={displayedGuideHours.toFixed(1)} sub={`${displayedGuideMiles.toFixed(1)} mi`} />
           <StatCard label="Trips Logged" value={displayedTripsCount} sub="entries" />
+        </div>
+
+        {/* Commercial vs Private breakdown */}
+        <div className="glass" style={{ borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Commercial vs Private</div>
+          <div style={{ height: 8, borderRadius: 4, background: 'rgba(148,163,184,0.15)', overflow: 'hidden', marginBottom: 14 }}>
+            <div style={{ width: `${commercialPct}%`, height: '100%', background: 'linear-gradient(90deg, #0891b2, #22d3ee)', borderRadius: 4 }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              ['Commercial', displayedCommercialHours, displayedCommercialMiles],
+              ['Private', displayedPrivateHours, displayedPrivateMiles],
+            ].map(([label, hours, miles]) => (
+              <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 14, color: '#94a3b8' }}>{String(label)}</span>
+                <span style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 600 }}>
+                  {(hours as number).toFixed(1)}h · {(miles as number).toFixed(1)}mi
+                </span>
+              </div>
+            ))}
+            <div style={{ height: 1, background: 'rgba(148,163,184,0.15)', margin: '2px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 14, color: '#e2e8f0', fontWeight: 700 }}>Total</span>
+              <span style={{ fontSize: 14, color: '#22d3ee', fontWeight: 700 }}>
+                {displayedTotalHours.toFixed(1)}h · {displayedTotalMiles.toFixed(1)}mi
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Breakdown */}

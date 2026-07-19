@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Waves, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function UpdatePasswordPage() {
@@ -70,9 +70,7 @@ export default function UpdatePasswordPage() {
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <div style={{ background: 'linear-gradient(135deg, #0891b2, #22d3ee)', borderRadius: 12, padding: 10 }}>
-              <Waves size={22} color="#0a1628" strokeWidth={2.5} />
-            </div>
+            <img src="/icons/icon-192.png" alt="RiverLog" width={42} height={42} style={{ borderRadius: 12 }} />
             <span style={{ fontWeight: 800, fontSize: 20, color: '#fff' }}>RiverLog</span>
           </Link>
         </div>
