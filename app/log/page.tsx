@@ -6,10 +6,12 @@ import { ArrowLeft, ArrowRight, Check, Camera, ImageIcon, X } from 'lucide-react
 import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
 import { FLOW_SECTIONS, fetchLatestCfs, usgsGraphUrl, searchUsgsSites, usgsMonitoringUrl, UsgsSite } from '@/lib/usgs'
+import { getRiverPoints } from '@/lib/riverMiles'
+import LocationDistanceStep, { emptySelection, type LocationSelection } from '@/components/forms/LocationDistanceStep'
 
-type Step = 'date' | 'type' | 'river' | 'flow' | 'location' | 'boat' | 'role' | 'hours' | 'miles' | 'notes' | 'company' | 'review'
-const ALL_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'boat', 'role', 'hours', 'miles', 'notes', 'company', 'review']
-const PRIVATE_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'boat', 'hours', 'miles', 'notes', 'review']
+type Step = 'date' | 'type' | 'river' | 'flow' | 'location' | 'miles' | 'hours' | 'boat' | 'role' | 'notes' | 'company' | 'review'
+const ALL_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'miles', 'hours', 'boat', 'role', 'notes', 'company', 'review']
+const PRIVATE_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'miles', 'hours', 'boat', 'notes', 'review']
 
 const STEP_LABELS: Record<Step, string> = {
   date: 'Date',
@@ -41,24 +43,6 @@ const COLORADO_RIVERS = [
 const LOCATION_PRESETS: Record<string, { putIn?: string; putInOptions?: string[]; takeOut?: string; takeOutOptions?: string[] }> = {
   shoshone: { putIn: 'Shoshone', takeOutOptions: ['Grizzly Creek', 'Two Rivers'] },
   dotsero: { putInOptions: ['Horse Creek', 'Cottonwood', 'Lyons Gulch'], takeOut: 'Dotsero' },
-}
-
-function LocationOptionButtons({ options, value, onSelect }: { options: string[]; value: string; onSelect: (v: string) => void }) {
-  const isOther = value !== '' && !options.includes(value)
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-      {options.map(opt => (
-        <button key={opt} type="button" onClick={() => onSelect(opt)}
-          style={{ padding: '10px 16px', borderRadius: 10, background: value === opt ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${value === opt ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: value === opt ? '#22d3ee' : '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: value === opt ? 600 : 400 }}>
-          {opt}
-        </button>
-      ))}
-      <button type="button" onClick={() => onSelect('')}
-        style={{ padding: '10px 16px', borderRadius: 10, background: isOther ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${isOther ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: isOther ? '#22d3ee' : '#94a3b8', cursor: 'pointer', fontSize: 14, fontWeight: isOther ? 600 : 400 }}>
-        Other
-      </button>
-    </div>
-  )
 }
 
 const ROLE_LABELS: Record<GuideRole, string> = {
@@ -94,12 +78,13 @@ export default function LogPage() {
   const [date, setDate] = useState(today)
   const [river, setRiver] = useState('')
   const [riverSearch, setRiverSearch] = useState('')
-  const [putIn, setPutIn] = useState('')
-  const [takeOut, setTakeOut] = useState('')
+  const [location, setLocation] = useState<LocationSelection>(emptySelection)
+  const { putIn, takeOut } = location
   const [boatType, setBoatType] = useState<BoatType | ''>('')
   const [role, setRole] = useState<GuideRole | ''>('')
   const [hours, setHours] = useState('')
   const [miles, setMiles] = useState('')
+  const [milesAuto, setMilesAuto] = useState(false)
   const [notes, setNotes] = useState('')
 
   // River flow (CFS) — quick-select for known sections, or search any active CO gauge
@@ -217,9 +202,24 @@ export default function LogPage() {
   // Auto-fill the fixed side of put-in/take-out when a known flow section is picked
   useEffect(() => {
     const preset = LOCATION_PRESETS[flowSectionId]
-    if (preset?.putIn) setPutIn(preset.putIn)
-    if (preset?.takeOut) setTakeOut(preset.takeOut)
+    if (!preset?.putIn && !preset?.takeOut) return
+    setLocation(prev => ({
+      ...prev,
+      ...(preset.putIn ? { putIn: preset.putIn, putInCoord: null } : {}),
+      ...(preset.takeOut ? { takeOut: preset.takeOut, takeOutCoord: null } : {}),
+      miles: null,
+      confidence: null,
+      confirmed: false,
+    }))
   }, [flowSectionId])
+
+  // The map step is the source of truth for mileage once the guide confirms it.
+  useEffect(() => {
+    if (location.confirmed && location.miles != null) {
+      setMiles(String(location.miles))
+      setMilesAuto(true)
+    }
+  }, [location.confirmed, location.miles])
 
   const activeFlow = flowSectionId
     ? (() => {
@@ -236,7 +236,7 @@ export default function LogPage() {
       case 'type': return !!tripType
       case 'river': return !!river
       case 'flow': return true
-      case 'location': return !!putIn && !!takeOut
+      case 'location': return !!putIn && !!takeOut && location.confirmed
       case 'boat': return !!boatType
       case 'role': return !!role
       case 'hours': return !!hours && parseFloat(hours) > 0
@@ -278,6 +278,11 @@ export default function LogPage() {
       river,
       put_in: putIn,
       take_out: takeOut,
+      put_in_lat: location.putInCoord?.lat ?? null,
+      put_in_lng: location.putInCoord?.lng ?? null,
+      take_out_lat: location.takeOutCoord?.lat ?? null,
+      take_out_lng: location.takeOutCoord?.lng ?? null,
+      miles_source: milesAuto ? 'nhd' : 'manual',
       boat_type: boatType,
       role,
       hours: parseFloat(hours),
@@ -467,25 +472,15 @@ export default function LogPage() {
 
         {step === 'location' && (() => {
           const preset = LOCATION_PRESETS[flowSectionId]
+          const riverPoints = getRiverPoints(river)
           return (
-            <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Put-in Location</label>
-                {preset?.putInOptions && (
-                  <LocationOptionButtons options={preset.putInOptions} value={putIn} onSelect={setPutIn} />
-                )}
-                <input value={putIn} onChange={e => setPutIn(e.target.value)}
-                  placeholder="e.g. Browns Canyon, Nathrop" className="input-river" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Take-out Location</label>
-                {preset?.takeOutOptions && (
-                  <LocationOptionButtons options={preset.takeOutOptions} value={takeOut} onSelect={setTakeOut} />
-                )}
-                <input value={takeOut} onChange={e => setTakeOut(e.target.value)}
-                  placeholder="e.g. Hecla Junction" className="input-river" />
-              </div>
-            </div>
+            <LocationDistanceStep
+              river={river}
+              putInOptions={preset?.putInOptions ?? riverPoints}
+              takeOutOptions={preset?.takeOutOptions ?? riverPoints}
+              value={location}
+              onChange={setLocation}
+            />
           )
         })()}
 
@@ -545,14 +540,19 @@ export default function LogPage() {
           <div style={{ marginTop: 28 }}>
             <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Distance traveled on the river</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <input type="number" value={miles} onChange={e => setMiles(e.target.value)}
+              <input type="number" value={miles} onChange={e => { setMiles(e.target.value); setMilesAuto(false) }}
                 placeholder="0.0" min="0" step="0.5" className="input-river"
                 style={{ fontSize: 32, fontWeight: 700, textAlign: 'center', padding: '20px' }} />
               <span style={{ fontSize: 24, color: '#475569', fontWeight: 600 }}>mi</span>
             </div>
+            {milesAuto && (
+              <p style={{ fontSize: 12, color: '#22d3ee', marginTop: 8 }}>
+                Measured along the river from {putIn} to {takeOut} using USGS hydrography — adjust if you know better.
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               {MILE_PRESETS.map(m => (
-                <button key={m} onClick={() => setMiles(String(m))}
+                <button key={m} onClick={() => { setMiles(String(m)); setMilesAuto(false) }}
                   style={{ flex: '1 0 calc(25% - 6px)', minWidth: 0, padding: '12px 8px', borderRadius: 10, background: miles === String(m) ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${miles === String(m) ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: miles === String(m) ? '#22d3ee' : '#64748b', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>
                   {m}
                 </button>
