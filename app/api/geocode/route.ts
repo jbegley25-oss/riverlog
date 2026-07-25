@@ -2,6 +2,8 @@
 // Runs server-side so the OSM Nominatim usage policy (identifying User-Agent,
 // modest request rate) is honoured in one place rather than from every phone.
 
+import { snapToRiver, normalizeRiverName } from '@/lib/riverDistance'
+
 type NominatimResult = { lat: string; lon: string; display_name: string }
 
 // This log book only covers Colorado, so every search is clamped to the state
@@ -70,7 +72,30 @@ export async function GET(request: Request) {
       }
     }
 
-    return Response.json({ results })
+    // Nominatim ranks by general place importance, not by "is this actually on
+    // the river." A put-in/take-out name is often shared by a street, a lake,
+    // or a subdivision states away from the real access point, so every
+    // candidate is snapped to the hydrography network and re-ranked by how
+    // well it lands on a flowline (matching the named river, when given).
+    const hint = normalizeRiverName(river)
+    const ranked = await Promise.all(
+      results.map(async r => {
+        try {
+          const snap = await snapToRiver({ lat: r.lat, lng: r.lng }, river)
+          const nameMatch = hint != null && normalizeRiverName(snap.riverName) === hint
+          return { ...r, snapDistanceMi: snap.snapDistanceMi, riverName: snap.riverName, nameMatch }
+        } catch {
+          return { ...r, snapDistanceMi: Infinity, riverName: null, nameMatch: false }
+        }
+      })
+    )
+    // A short snap distance alone isn't enough — "Two Butte Creek" sits right
+    // on its own banks too. Candidates whose nearest flowline actually matches
+    // the named river always outrank ones that merely happen to be close to
+    // some unrelated stream.
+    ranked.sort((a, b) => (Number(b.nameMatch) - Number(a.nameMatch)) || (a.snapDistanceMi - b.snapDistanceMi))
+
+    return Response.json({ results: ranked })
   } catch {
     return Response.json({ results: [] })
   }

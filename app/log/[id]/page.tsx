@@ -409,7 +409,6 @@ export default function EntryPage() {
                 type="file"
                 accept="image/*"
                 multiple
-                capture="environment"
                 onChange={handlePhotoUpload}
                 style={{ display: 'none' }}
               />

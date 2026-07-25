@@ -202,7 +202,7 @@ function orientedPath(feature: HrFeature): [number, number][] {
   return feature.attributes.flowdir === 1 ? path : path.reverse()
 }
 
-function normalizeRiverName(name?: string | null): string | null {
+export function normalizeRiverName(name?: string | null): string | null {
   if (!name) return null
   return name.toLowerCase().replace(/\b(river|creek|fork|the)\b/g, '').replace(/[^a-z]/g, '') || null
 }

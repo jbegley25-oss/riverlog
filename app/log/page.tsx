@@ -593,7 +593,7 @@ export default function LogPage() {
                   <Camera size={13} />
                   {uploading ? 'Uploading…' : 'Add'}
                 </button>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple capture="environment" onChange={handlePhotoUpload} style={{ display: 'none' }} />
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} />
               </div>
 
               {photos.length === 0 ? (

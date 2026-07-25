@@ -55,12 +55,29 @@ const ACCENT = '#22d3ee'
 const PANEL = 'rgba(10,22,40,0.6)'
 const BORDER = 'rgba(34,211,238,0.15)'
 
+type Candidate = { label: string; lat: number; lng: number; nameMatch?: boolean }
+
+// Rough relative distance for ranking candidate pairs — doesn't need to be
+// geodesically precise, just consistent enough to find the closest pair.
+function approxMi(a: Candidate, b: Candidate): number {
+  const dLat = a.lat - b.lat
+  const dLng = (a.lng - b.lng) * Math.cos((a.lat * Math.PI) / 180)
+  return Math.sqrt(dLat * dLat + dLng * dLng) * 69
+
+}
+
 export default function LocationDistanceStep({ river, putInOptions, takeOutOptions, value, onChange }: Props) {
   const [locating, setLocating] = useState(false)
   const [calculating, setCalculating] = useState(false)
   const [result, setResult] = useState<DistanceResponse | null>(null)
   const [error, setError] = useState('')
   const requestId = useRef(0)
+
+  const [putInCandidates, setPutInCandidates] = useState<Candidate[]>([])
+  const [takeOutCandidates, setTakeOutCandidates] = useState<Candidate[]>([])
+  const [putInLabel, setPutInLabel] = useState('')
+  const [takeOutLabel, setTakeOutLabel] = useState('')
+  const [pickerOpen, setPickerOpen] = useState<'putIn' | 'takeOut' | null>(null)
 
   const { putIn, takeOut, putInCoord, takeOutCoord } = value
 
@@ -73,11 +90,26 @@ export default function LocationDistanceStep({ river, putInOptions, takeOutOptio
   function setName(which: 'putIn' | 'takeOut', name: string) {
     setResult(null)
     setError('')
+    setPutInCandidates([])
+    setTakeOutCandidates([])
+    setPutInLabel('')
+    setTakeOutLabel('')
+    setPickerOpen(null)
     patch({
       [which]: name,
       [which === 'putIn' ? 'putInCoord' : 'takeOutCoord']: null,
       miles: null,
       confidence: null,
+      confirmed: false,
+    } as Partial<LocationSelection>)
+  }
+
+  function pickCandidate(which: 'putIn' | 'takeOut', c: Candidate) {
+    if (which === 'putIn') setPutInLabel(c.label)
+    else setTakeOutLabel(c.label)
+    setPickerOpen(null)
+    patch({
+      [which === 'putIn' ? 'putInCoord' : 'takeOutCoord']: { lat: c.lat, lng: c.lng },
       confirmed: false,
     } as Partial<LocationSelection>)
   }
@@ -92,26 +124,49 @@ export default function LocationDistanceStep({ river, putInOptions, takeOutOptio
       setLocating(true)
       setError('')
       try {
-        const lookup = async (query: string): Promise<MapPoint | null> => {
+        const search = async (query: string): Promise<Candidate[]> => {
           const params = new URLSearchParams({ q: query, river })
           const res = await fetch(`/api/geocode?${params}`)
-          if (!res.ok) return null
+          if (!res.ok) return []
           const data = await res.json()
-          const first = data.results?.[0]
-          return first ? { lat: first.lat, lng: first.lng } : null
+          return (data.results ?? []) as Candidate[]
         }
-        const [p, t] = await Promise.all([
-          putInCoord ?? lookup(putIn),
-          takeOutCoord ?? lookup(takeOut),
+        const [pCands, tCands] = await Promise.all([
+          putInCoord ? Promise.resolve<Candidate[]>([{ label: putIn, ...putInCoord }]) : search(putIn),
+          takeOutCoord ? Promise.resolve<Candidate[]>([{ label: takeOut, ...takeOutCoord }]) : search(takeOut),
         ])
         if (id !== requestId.current) return
-        if (!p || !t) {
+        if (!pCands.length || !tCands.length) {
           setError(
-            `Could not find ${!p ? `"${putIn}"` : `"${takeOut}"`} on the map. Try a nearby landmark, or paste coordinates as "lat, lng".`
+            `Could not find ${!pCands.length ? `"${putIn}"` : `"${takeOut}"`} on the map. Try a nearby landmark, or paste coordinates as "lat, lng".`
           )
           return
         }
-        patch({ putInCoord: p, takeOutCoord: t, confirmed: false })
+
+        // A real put-in and take-out sit on the same stretch of river. The API
+        // already flags which candidates actually snap onto the named river
+        // (nameMatch) — prefer a pair that both do, and only among those use
+        // proximity as the tie-break, so an unrelated but nearby "Two Rivers
+        // Lake" can't beat the real access point just for being closer.
+        let best = { p: pCands[0], t: tCands[0], d: Infinity, matched: false }
+        for (const p of pCands) {
+          for (const t of tCands) {
+            const matched = !!p.nameMatch && !!t.nameMatch
+            const d = approxMi(p, t)
+            const better = matched && !best.matched ? true : matched === best.matched && d < best.d
+            if (better) best = { p, t, d, matched }
+          }
+        }
+
+        setPutInCandidates(pCands)
+        setTakeOutCandidates(tCands)
+        setPutInLabel(best.p.label)
+        setTakeOutLabel(best.t.label)
+        patch({
+          putInCoord: { lat: best.p.lat, lng: best.p.lng },
+          takeOutCoord: { lat: best.t.lat, lng: best.t.lng },
+          confirmed: false,
+        })
       } finally {
         if (id === requestId.current) setLocating(false)
       }
@@ -175,8 +230,27 @@ export default function LocationDistanceStep({ river, putInOptions, takeOutOptio
     <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <Field label="Put-in Location" options={putInOptions} value={putIn} onChange={v => setName('putIn', v)}
         placeholder="e.g. Ruby Mountain, Nathrop" />
+      {putInCoord && putInCandidates.length > 1 && (
+        <CandidatePicker
+          label={putInLabel}
+          candidates={putInCandidates}
+          open={pickerOpen === 'putIn'}
+          onToggle={() => setPickerOpen(pickerOpen === 'putIn' ? null : 'putIn')}
+          onPick={c => pickCandidate('putIn', c)}
+        />
+      )}
+
       <Field label="Take-out Location" options={takeOutOptions} value={takeOut} onChange={v => setName('takeOut', v)}
         placeholder="e.g. Hecla Junction" />
+      {takeOutCoord && takeOutCandidates.length > 1 && (
+        <CandidatePicker
+          label={takeOutLabel}
+          candidates={takeOutCandidates}
+          open={pickerOpen === 'takeOut'}
+          onToggle={() => setPickerOpen(pickerOpen === 'takeOut' ? null : 'takeOut')}
+          onPick={c => pickCandidate('takeOut', c)}
+        />
+      )}
 
       {(locating || calculating) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
@@ -244,6 +318,36 @@ export default function LocationDistanceStep({ river, putInOptions, takeOutOptio
           >
             {value.confirmed ? <><Check size={16} /> Confirmed</> : <><MapPin size={16} /> Yes, these are correct</>}
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CandidatePicker({ label, candidates, open, onToggle, onPick }: {
+  label: string
+  candidates: Candidate[]
+  open: boolean
+  onToggle: () => void
+  onPick: (c: Candidate) => void
+}) {
+  return (
+    <div style={{ marginTop: -10 }}>
+      <p style={{ fontSize: 12, color: '#64748b' }}>
+        Matched: <span style={{ color: '#94a3b8' }}>{label}</span>{' '}
+        <button type="button" onClick={onToggle}
+          style={{ background: 'none', border: 'none', color: ACCENT, cursor: 'pointer', fontSize: 12, padding: 0 }}>
+          not this?
+        </button>
+      </p>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {candidates.map(c => (
+            <button key={c.label} type="button" onClick={() => onPick(c)}
+              style={{ textAlign: 'left', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '8px 12px', color: '#94a3b8', cursor: 'pointer', fontSize: 12 }}>
+              {c.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
