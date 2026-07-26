@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings, Award } from 'lucide-react'
+import { Plus, FileText, LogOut, ChevronRight, Droplets, Clock, Map, Settings, Award, Shield } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile, Totals } from '@/lib/types'
 import { format } from 'date-fns'
@@ -145,6 +145,12 @@ export default function DashboardClient({ profile, entries, totals }: {
             <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>The River Log</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            {profile?.is_admin && (
+              <Link href="/admin" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 8, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)', color: '#94a3b8', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                <Shield size={16} />
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Admin Dashboard</span>
+              </Link>
+            )}
             <Link href="/profile" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.15)', color: '#94a3b8', textDecoration: 'none' }}>
               <Settings size={16} />
             </Link>
