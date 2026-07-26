@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { LogEntry, Profile } from '@/lib/types'
 import { format } from 'date-fns'
+import { ChevronRight } from 'lucide-react'
 import AdminDownload from './AdminDownload'
 
 export default async function AdminPage() {
@@ -61,18 +62,24 @@ export default async function AdminPage() {
           const entries = p.log_entries ?? []
           const gh = entries.reduce((s, e) => s + e.hours, 0)
           const gm = entries.reduce((s, e) => s + e.miles, 0)
+          const newCount = entries.filter(e => !e.exported_at).length
           return (
             <div key={p.id} className="glass" style={{ borderRadius: 14, marginBottom: 12, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: entries.length > 0 ? '1px solid rgba(34,211,238,0.08)' : 'none' }}>
+              <Link href={`/admin/${p.id}`} style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: entries.length > 0 ? '1px solid rgba(34,211,238,0.08)' : 'none', textDecoration: 'none' }}>
                 <div>
                   <div style={{ fontWeight: 700, color: '#e2e8f0', fontSize: 15 }}>{p.last_name}, {p.first_name}</div>
                   <div style={{ fontSize: 12, color: '#475569' }}>{p.company_name} · ROL {p.rol_license}</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#22d3ee' }}>{gh.toFixed(1)}h / {gm.toFixed(1)}mi</div>
-                  <div style={{ fontSize: 11, color: '#334155' }}>{entries.length} trips</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#22d3ee' }}>{gh.toFixed(1)}h / {gm.toFixed(1)}mi</div>
+                    <div style={{ fontSize: 11, color: '#334155' }}>
+                      {entries.length} trips{newCount > 0 && <span style={{ color: '#4ade80' }}> · {newCount} new</span>}
+                    </div>
+                  </div>
+                  <ChevronRight size={16} color="#334155" />
                 </div>
-              </div>
+              </Link>
               {entries.slice(0, 3).map((e: LogEntry) => (
                 <div key={e.id} style={{ padding: '10px 18px', borderBottom: '1px solid rgba(34,211,238,0.05)', display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                   <span style={{ color: '#94a3b8' }}>{format(new Date(e.date + 'T00:00:00'), 'MMM d, yyyy')} · {e.river}</span>

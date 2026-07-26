@@ -28,6 +28,7 @@ export interface LogEntry {
   rol_license: string
   notes: string | null
   cfs: number | null
+  exported_at: string | null
   created_at: string
   profiles?: Profile
 }
