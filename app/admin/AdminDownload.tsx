@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { LogEntry, Profile } from '@/lib/types'
 
 export default function AdminDownload({ profiles }: { profiles: (Profile & { log_entries: LogEntry[] })[] }) {
+  const router = useRouter()
   const [generating, setGenerating] = useState(false)
 
   async function downloadAll() {
@@ -15,7 +18,7 @@ export default function AdminDownload({ profiles }: { profiles: (Profile & { log
         import('jszip'),
       ])
       const zip = new JSZip()
-      let count = 0
+      const exportedIds: string[] = []
 
       for (const p of profiles) {
         if (!p.log_entries?.length) continue
@@ -25,13 +28,13 @@ export default function AdminDownload({ profiles }: { profiles: (Profile & { log
           const first = (p.first_name || 'Unknown').trim().replace(/\s+/g, '_')
           const last = (p.last_name || 'Unknown').trim().replace(/\s+/g, '_')
           zip.file(`${first}_${last}_RiverLog2026.pdf`, blob)
-          count++
+          exportedIds.push(...p.log_entries.map(e => e.id))
         } catch (e) {
           console.error(`Failed to generate PDF for ${p.first_name} ${p.last_name}`, e)
         }
       }
 
-      if (!count) return
+      if (!exportedIds.length) return
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       const url = URL.createObjectURL(zipBlob)
@@ -40,6 +43,10 @@ export default function AdminDownload({ profiles }: { profiles: (Profile & { log
       a.download = `RiverLog2026_AllGuides.zip`
       a.click()
       URL.revokeObjectURL(url)
+
+      const supabase = createClient()
+      await supabase.from('log_entries').update({ exported_at: new Date().toISOString() }).in('id', exportedIds)
+      router.refresh()
     } catch (e) {
       console.error(e)
     } finally {
