@@ -45,7 +45,9 @@ export default function GenerateClient({ profile, entries }: { profile: Profile;
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `riverlog-${profile.last_name}-${new Date().toISOString().split('T')[0]}.pdf`
+      const first = profile.first_name.trim().replace(/\s+/g, '_')
+      const last = profile.last_name.trim().replace(/\s+/g, '_')
+      a.download = `${first}_${last}_RiverLog2026.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
