@@ -10,20 +10,36 @@ export default function AdminDownload({ profiles }: { profiles: (Profile & { log
   async function downloadAll() {
     setGenerating(true)
     try {
-      const { generateLogSheetPDF } = await import('@/lib/pdf/generatePDF')
+      const [{ generateLogSheetPDF }, { default: JSZip }] = await Promise.all([
+        import('@/lib/pdf/generatePDF'),
+        import('jszip'),
+      ])
+      const zip = new JSZip()
+      let count = 0
+
       for (const p of profiles) {
         if (!p.log_entries?.length) continue
-        const blob = await generateLogSheetPDF(p as Profile, p.log_entries)
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        const first = p.first_name.trim().replace(/\s+/g, '_')
-        const last = p.last_name.trim().replace(/\s+/g, '_')
-        a.download = `${first}_${last}_RiverLog2026.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-        await new Promise(r => setTimeout(r, 300))
+        // One guide's PDF failing (bad data, etc.) shouldn't stop the rest.
+        try {
+          const blob = await generateLogSheetPDF(p as Profile, p.log_entries)
+          const first = (p.first_name || 'Unknown').trim().replace(/\s+/g, '_')
+          const last = (p.last_name || 'Unknown').trim().replace(/\s+/g, '_')
+          zip.file(`${first}_${last}_RiverLog2026.pdf`, blob)
+          count++
+        } catch (e) {
+          console.error(`Failed to generate PDF for ${p.first_name} ${p.last_name}`, e)
+        }
       }
+
+      if (!count) return
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(zipBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `RiverLog2026_AllGuides.zip`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (e) {
       console.error(e)
     } finally {
