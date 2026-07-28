@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import { BoatType, GuideRole } from '@/lib/types'
 import { FLOW_SECTIONS, fetchLatestCfs, usgsGraphUrl, searchUsgsSites, usgsMonitoringUrl, UsgsSite } from '@/lib/usgs'
 import { getRiverPoints } from '@/lib/riverMiles'
-import LocationDistanceStep, { emptySelection, type LocationSelection } from '@/components/forms/LocationDistanceStep'
 
 type Step = 'date' | 'type' | 'river' | 'flow' | 'location' | 'miles' | 'hours' | 'boat' | 'role' | 'notes' | 'company' | 'review'
 const ALL_STEPS: Step[] = ['date', 'type', 'river', 'flow', 'location', 'miles', 'hours', 'boat', 'role', 'notes', 'company', 'review']
@@ -78,13 +77,12 @@ export default function LogPage() {
   const [date, setDate] = useState(today)
   const [river, setRiver] = useState('')
   const [riverSearch, setRiverSearch] = useState('')
-  const [location, setLocation] = useState<LocationSelection>(emptySelection)
+  const [location, setLocation] = useState({ putIn: '', takeOut: '' })
   const { putIn, takeOut } = location
   const [boatType, setBoatType] = useState<BoatType | ''>('')
   const [role, setRole] = useState<GuideRole | ''>('')
   const [hours, setHours] = useState('')
   const [miles, setMiles] = useState('')
-  const [milesAuto, setMilesAuto] = useState(false)
   const [notes, setNotes] = useState('')
 
   // River flow (CFS) — quick-select for known sections, or search any active CO gauge
@@ -205,21 +203,10 @@ export default function LogPage() {
     if (!preset?.putIn && !preset?.takeOut) return
     setLocation(prev => ({
       ...prev,
-      ...(preset.putIn ? { putIn: preset.putIn, putInCoord: null } : {}),
-      ...(preset.takeOut ? { takeOut: preset.takeOut, takeOutCoord: null } : {}),
-      miles: null,
-      confidence: null,
-      confirmed: false,
+      ...(preset.putIn ? { putIn: preset.putIn } : {}),
+      ...(preset.takeOut ? { takeOut: preset.takeOut } : {}),
     }))
   }, [flowSectionId])
-
-  // The map step is the source of truth for mileage once the guide confirms it.
-  useEffect(() => {
-    if (location.confirmed && location.miles != null) {
-      setMiles(String(location.miles))
-      setMilesAuto(true)
-    }
-  }, [location.confirmed, location.miles])
 
   const activeFlow = flowSectionId
     ? (() => {
@@ -236,7 +223,7 @@ export default function LogPage() {
       case 'type': return !!tripType
       case 'river': return !!river
       case 'flow': return true
-      case 'location': return !!putIn && !!takeOut && location.confirmed
+      case 'location': return !!putIn && !!takeOut
       case 'boat': return !!boatType
       case 'role': return !!role
       case 'hours': return !!hours && parseFloat(hours) > 0
@@ -278,11 +265,6 @@ export default function LogPage() {
       river,
       put_in: putIn,
       take_out: takeOut,
-      put_in_lat: location.putInCoord?.lat ?? null,
-      put_in_lng: location.putInCoord?.lng ?? null,
-      take_out_lat: location.takeOutCoord?.lat ?? null,
-      take_out_lng: location.takeOutCoord?.lng ?? null,
-      miles_source: milesAuto ? 'nhd' : 'manual',
       boat_type: boatType,
       role,
       hours: parseFloat(hours),
@@ -473,14 +455,42 @@ export default function LogPage() {
         {step === 'location' && (() => {
           const preset = LOCATION_PRESETS[flowSectionId]
           const riverPoints = getRiverPoints(river)
+          const putInOptions = preset?.putInOptions ?? riverPoints
+          const takeOutOptions = preset?.takeOutOptions ?? riverPoints
           return (
-            <LocationDistanceStep
-              river={river}
-              putInOptions={preset?.putInOptions ?? riverPoints}
-              takeOutOptions={preset?.takeOutOptions ?? riverPoints}
-              value={location}
-              onChange={setLocation}
-            />
+            <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Put-in Location</label>
+                {putInOptions.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    {putInOptions.map(opt => (
+                      <button key={opt} type="button" onClick={() => setLocation(prev => ({ ...prev, putIn: opt }))}
+                        style={{ padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 14, background: putIn === opt ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${putIn === opt ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: putIn === opt ? '#22d3ee' : '#94a3b8', fontWeight: putIn === opt ? 600 : 400 }}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input value={putIn} onChange={e => setLocation(prev => ({ ...prev, putIn: e.target.value }))}
+                  placeholder="e.g. Ruby Mountain, Nathrop" className="input-river" />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 8 }}>Take-out Location</label>
+                {takeOutOptions.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    {takeOutOptions.map(opt => (
+                      <button key={opt} type="button" onClick={() => setLocation(prev => ({ ...prev, takeOut: opt }))}
+                        style={{ padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 14, background: takeOut === opt ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${takeOut === opt ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: takeOut === opt ? '#22d3ee' : '#94a3b8', fontWeight: takeOut === opt ? 600 : 400 }}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <input value={takeOut} onChange={e => setLocation(prev => ({ ...prev, takeOut: e.target.value }))}
+                  placeholder="e.g. Hecla Junction" className="input-river" />
+              </div>
+            </div>
           )
         })()}
 
@@ -540,19 +550,14 @@ export default function LogPage() {
           <div style={{ marginTop: 28 }}>
             <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Distance traveled on the river</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <input type="number" value={miles} onChange={e => { setMiles(e.target.value); setMilesAuto(false) }}
+              <input type="number" value={miles} onChange={e => setMiles(e.target.value)}
                 placeholder="0.0" min="0" step="0.5" className="input-river"
                 style={{ fontSize: 32, fontWeight: 700, textAlign: 'center', padding: '20px' }} />
               <span style={{ fontSize: 24, color: '#475569', fontWeight: 600 }}>mi</span>
             </div>
-            {milesAuto && (
-              <p style={{ fontSize: 12, color: '#22d3ee', marginTop: 8 }}>
-                Measured along the river from {putIn} to {takeOut} using USGS hydrography — adjust if you know better.
-              </p>
-            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
               {MILE_PRESETS.map(m => (
-                <button key={m} onClick={() => { setMiles(String(m)); setMilesAuto(false) }}
+                <button key={m} onClick={() => setMiles(String(m))}
                   style={{ flex: '1 0 calc(25% - 6px)', minWidth: 0, padding: '12px 8px', borderRadius: 10, background: miles === String(m) ? 'rgba(34,211,238,0.15)' : 'rgba(10,22,40,0.6)', border: `1px solid ${miles === String(m) ? '#22d3ee' : 'rgba(34,211,238,0.15)'}`, color: miles === String(m) ? '#22d3ee' : '#64748b', cursor: 'pointer', fontSize: 16, fontWeight: 600 }}>
                   {m}
                 </button>
